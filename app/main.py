@@ -5,7 +5,7 @@ from .state import AppState, State
 from .events import Event
 from .models import Video
 from .storage import VideoStorage
-from .player import MpvPlayer
+from .player import MpvPlayer, MPV_EXIT_CODE_NEXT
 from .ui import Tui
 from .next_logic import select_next_video
 
@@ -41,7 +41,7 @@ def main(stdscr):
                     storage.save()
 
                 # Check if exit was due to 'n' key in mpv
-                if exit_code == 5:
+                if exit_code == MPV_EXIT_CODE_NEXT:
                     next_video = select_next_video(app_state.videos,
                                                    current_video_id=app_state.now_playing.id if app_state.now_playing else None,
                                                    last_video_id=app_state.last_played_video_id)

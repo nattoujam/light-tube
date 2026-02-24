@@ -4,6 +4,8 @@ import signal
 from typing import Optional
 from .models import Video
 
+MPV_EXIT_CODE_NEXT = 5
+
 class MpvPlayer:
     def __init__(self):
         self.process: Optional[subprocess.Popen] = None
@@ -24,7 +26,7 @@ class MpvPlayer:
         input_conf_path = "/tmp/mpv_input.conf"
         with open(input_conf_path, "w") as f:
             f.write("s quit\n")
-            f.write("n quit 5\n") # Map 'n' to quit with exit code 5 to signal 'next'
+            f.write(f"n quit {MPV_EXIT_CODE_NEXT}\n") # Map 'n' to quit with exit code 5 to signal 'next'
 
         try:
             self.process = subprocess.Popen(
