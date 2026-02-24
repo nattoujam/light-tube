@@ -31,7 +31,7 @@ class Tui:
         line = f" {app_name} | {tab_info} | {status}"
         self.header_win.addstr(0, 0, line.ljust(self.width))
         self.header_win.attroff(curses.A_REVERSE)
-        self.header_win.refresh()
+        self.header_win.wnoutrefresh()
 
     def draw_main_area(self, state: AppState):
         self.main_win.erase()
@@ -65,7 +65,7 @@ class Tui:
                 else:
                     self.main_win.addstr(i, 0, line)
 
-        self.main_win.refresh()
+        self.main_win.wnoutrefresh()
 
     def draw_footer(self, state: AppState):
         self.footer_win.erase()
@@ -96,7 +96,7 @@ class Tui:
             next_text = f"Next: {next_video.title} (n)"
             self.footer_win.addstr(1, max(2, self.width // 2), next_text[:self.width // 2 - 2])
 
-        self.footer_win.refresh()
+        self.footer_win.wnoutrefresh()
 
     def draw_help(self):
         if not self.help_win:
@@ -114,7 +114,7 @@ class Tui:
         self.help_win.addstr(9, 2, "b: Back to UI")
         self.help_win.addstr(10, 2, "h: Toggle Help")
         self.help_win.addstr(11, 2, "q: Quit")
-        self.help_win.refresh()
+        self.help_win.wnoutrefresh()
 
     def render(self, state: AppState, show_help: bool = False):
         self.draw_header(state)
@@ -122,9 +122,4 @@ class Tui:
         self.draw_footer(state)
         if show_help:
             self.draw_help()
-        elif self.help_win:
-            # Just erase the help window area from stdscr if needed,
-            # but usually refreshing main/footer is enough if help was over them.
-            # In simple curses, we might need to touch and refresh.
-            pass
-        self.stdscr.refresh()
+        curses.doupdate()
