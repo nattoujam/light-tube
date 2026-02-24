@@ -1,5 +1,5 @@
 [project]
-name = "lightweight-video-player"
+name = "light-tube"
 version = "0.1.0"
 description = "Lightweight video player prototype"
 authors = [
