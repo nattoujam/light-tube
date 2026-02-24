@@ -1,4 +1,4 @@
-# Lightweight Video Player
+# Light Tube
 
 External mpv player based TUI video player prototype.
 
