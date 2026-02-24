@@ -68,5 +68,6 @@ def select_next_video(
         if related:
             return related[0]
 
-    # 5. Random (fallback)
-    return random.choice(candidates)
+    # 5. Stable Fallback (Sort by title/ID instead of random to avoid UI flickering)
+    candidates.sort(key=lambda x: (x.title, x.id))
+    return candidates[0]

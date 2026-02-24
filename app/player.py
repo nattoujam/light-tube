@@ -19,9 +19,16 @@ class MpvPlayer:
         # In a real environment, we'd use the video URL.
         # For prototype/verification, we use mpv's ability to play dummy or local files.
         # Here we use video.url.
+        # Create a temporary input.conf to map 's' to quit, matching our app's 'stop' key.
+        # This helps when mpv has focus and the user wants to stop.
+        input_conf_path = "/tmp/mpv_input.conf"
+        with open(input_conf_path, "w") as f:
+            f.write("s quit\n")
+            f.write("n quit\n") # Also map 'n' to quit so next works from mpv too
+
         try:
             self.process = subprocess.Popen(
-                ['mpv', video.url, '--title=' + video.title],
+                ['mpv', video.url, '--title=' + video.title, '--input-conf=' + input_conf_path],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
