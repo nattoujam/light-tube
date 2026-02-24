@@ -31,7 +31,7 @@ class Tui:
         line = f" {app_name} | {tab_info} | {status}"
         self.header_win.addstr(0, 0, line.ljust(self.width))
         self.header_win.attroff(curses.A_REVERSE)
-        self.header_win.wnoutrefresh()
+        self.header_win.noutrefresh()
 
     def draw_main_area(self, state: AppState):
         self.main_win.erase()
@@ -65,7 +65,7 @@ class Tui:
                 else:
                     self.main_win.addstr(i, 0, line)
 
-        self.main_win.wnoutrefresh()
+        self.main_win.noutrefresh()
 
     def draw_footer(self, state: AppState):
         self.footer_win.erase()
@@ -96,7 +96,7 @@ class Tui:
             next_text = f"Next: {next_video.title} (n)"
             self.footer_win.addstr(1, max(2, self.width // 2), next_text[:self.width // 2 - 2])
 
-        self.footer_win.wnoutrefresh()
+        self.footer_win.noutrefresh()
 
     def draw_help(self):
         if not self.help_win:
@@ -114,7 +114,7 @@ class Tui:
         self.help_win.addstr(9, 2, "b: Back to UI")
         self.help_win.addstr(10, 2, "h: Toggle Help")
         self.help_win.addstr(11, 2, "q: Quit")
-        self.help_win.wnoutrefresh()
+        self.help_win.noutrefresh()
 
     def render(self, state: AppState, show_help: bool = False):
         self.draw_header(state)
