@@ -34,11 +34,22 @@ def main(stdscr):
         if app_state.state == State.PLAYING:
             exit_code = player.poll_exit_code()
             if exit_code is not None:
+                # Mark as viewed
                 if app_state.now_playing:
                     app_state.now_playing.viewed = True
                     storage.update_video(app_state.now_playing)
                     storage.save()
-                app_state.handle_event(Event.MPV_EXITED)
+
+                # Check if exit was due to 'n' key in mpv
+                if exit_code == 5:
+                    next_video = select_next_video(app_state.videos,
+                                                   current_video_id=app_state.now_playing.id if app_state.now_playing else None,
+                                                   last_video_id=app_state.last_played_video_id)
+                    app_state.handle_event(Event.MPV_EXITED)
+                    if next_video:
+                        app_state.handle_event(Event.NEXT, video_id=next_video.id)
+                else:
+                    app_state.handle_event(Event.MPV_EXITED)
 
         if app_state.state == State.UPDATING:
             if update_finish_time and datetime.now() >= update_finish_time:

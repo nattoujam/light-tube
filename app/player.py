@@ -24,7 +24,7 @@ class MpvPlayer:
         input_conf_path = "/tmp/mpv_input.conf"
         with open(input_conf_path, "w") as f:
             f.write("s quit\n")
-            f.write("n quit\n") # Also map 'n' to quit so next works from mpv too
+            f.write("n quit 5\n") # Map 'n' to quit with exit code 5 to signal 'next'
 
         try:
             self.process = subprocess.Popen(
