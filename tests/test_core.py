@@ -2,7 +2,6 @@ import unittest
 from datetime import datetime
 from app.models import Video
 from app.state import State, AppState
-from app.events import Event
 
 class TestCore(unittest.TestCase):
     def test_video_creation(self):
@@ -14,19 +13,17 @@ class TestCore(unittest.TestCase):
             upload_date=now,
             url="http://example.com/video"
         )
-        self.assertEqual(video.id, "test-id")
-        self.assertEqual(video.title, "Test Title")
+        # デフォルト値の確認など、非自明な部分のみを残す
         self.assertFalse(video.viewed)
+        self.assertIsNone(video.started_at)
 
     def test_app_state_initialization(self):
         state = AppState()
+        # 初期状態が正しく設定されていることを確認
         self.assertEqual(state.state, State.BOOT)
         self.assertEqual(state.current_tab, "New")
         self.assertIsNone(state.now_playing)
-
-    def test_event_enum(self):
-        self.assertEqual(Event.PLAY_SELECTED.name, "PLAY_SELECTED")
-        self.assertEqual(Event.MPV_EXITED.name, "MPV_EXITED")
+        self.assertIsNone(state.mpv_pid)
 
 if __name__ == "__main__":
     unittest.main()
