@@ -31,8 +31,14 @@ class AppState:
         if event == Event.QUIT:
             return
 
+        if event == Event.CACHE_LOADED:
+            self.display_videos = kwargs.get('videos', [])
+            if self.state == State.BOOT:
+                self.state = State.BROWSE
+            return
+
         if self.state == State.BOOT:
-            self._handle_boot(event, **kwargs)
+            pass # CACHE_LOADED handled above
         elif self.state == State.BROWSE:
             self._handle_browse(event, **kwargs)
         elif self.state == State.LAUNCHING:
@@ -45,11 +51,6 @@ class AppState:
             self._handle_updating(event, **kwargs)
         elif self.state == State.ERROR:
             self._handle_error(event, **kwargs)
-
-    def _handle_boot(self, event: Event, **kwargs: Any) -> None:
-        if event == Event.CACHE_LOADED:
-            self.display_videos = kwargs.get('videos', [])
-            self.state = State.BROWSE
 
     def _handle_browse(self, event: Event, **kwargs: Any) -> None:
         if event == Event.PLAY_SELECTED or event == Event.NEXT:
@@ -71,8 +72,6 @@ class AppState:
         elif event == Event.RANDOM_REFRESH:
             # Note: The caller (main.py) is responsible for refreshing display_videos
             pass
-        elif event == Event.CACHE_LOADED:
-            self.display_videos = kwargs.get('videos', [])
 
     def _handle_launching(self, event: Event, **kwargs: Any) -> None:
         if event == Event.MPV_SPAWNED:

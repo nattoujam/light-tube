@@ -93,6 +93,7 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
 
             video = videos[ui.selected_idx]
             app_state.handle_event(Event.PLAY_SELECTED, video_id=video.id)
+            app_state.handle_event(Event.CACHE_LOADED, videos=get_display_videos(storage, app_state))
     elif key == ord('n'):
         if app_state.state == State.PLAYING and app_state.now_playing:
             app_state.now_playing.viewed = True
@@ -103,6 +104,7 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
                                        last_video_id=app_state.last_played_video_id)
         if next_video:
             app_state.handle_event(Event.NEXT, video_id=next_video.id)
+            app_state.handle_event(Event.CACHE_LOADED, videos=get_display_videos(storage, app_state))
     elif key == ord('s'):
         if app_state.state == State.PLAYING and app_state.now_playing:
             app_state.now_playing.viewed = True
