@@ -1,7 +1,8 @@
 import sqlite3
 import os
+import contextlib
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple, Any, Iterator
 from .models import Video
 
 class VideoStorage:
@@ -10,7 +11,7 @@ class VideoStorage:
         self._init_db()
 
     def _init_db(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connection() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS videos (
                     id TEXT PRIMARY KEY,
@@ -22,7 +23,16 @@ class VideoStorage:
                     started_at TEXT
                 )
             """)
-            conn.commit()
+
+    @contextlib.contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _row_to_video(self, row: sqlite3.Row) -> Video:
         return Video(
@@ -45,7 +55,7 @@ class VideoStorage:
         pass
 
     def add_video(self, video: Video) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connection() as conn:
             conn.execute("""
                 INSERT OR IGNORE INTO videos (id, title, channel, upload_date, url, viewed, started_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -58,17 +68,15 @@ class VideoStorage:
                 1 if video.viewed else 0,
                 video.started_at.isoformat() if video.started_at else None
             ))
-            conn.commit()
 
     def get_video_by_id(self, video_id: str) -> Optional[Video]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
+        with self._connection() as conn:
             cursor = conn.execute("SELECT * FROM videos WHERE id = ?", (video_id,))
             row = cursor.fetchone()
             return self._row_to_video(row) if row else None
 
     def update_video(self, video: Video) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connection() as conn:
             conn.execute("""
                 UPDATE videos
                 SET title = ?, channel = ?, upload_date = ?, url = ?, viewed = ?, started_at = ?
@@ -82,17 +90,14 @@ class VideoStorage:
                 video.started_at.isoformat() if video.started_at else None,
                 video.id
             ))
-            conn.commit()
 
     def get_new_videos(self, limit: int = 100) -> List[Video]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
+        with self._connection() as conn:
             cursor = conn.execute("SELECT * FROM videos ORDER BY upload_date DESC LIMIT ?", (limit,))
             return [self._row_to_video(row) for row in cursor.fetchall()]
 
     def get_random_videos(self, limit: int = 100) -> List[Video]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
+        with self._connection() as conn:
             cursor = conn.execute("SELECT * FROM videos ORDER BY RANDOM() LIMIT ?", (limit,))
             return [self._row_to_video(row) for row in cursor.fetchall()]
 
@@ -101,8 +106,7 @@ class VideoStorage:
         if not target:
             return []
 
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
+        with self._connection() as conn:
             # Related logic: Same channel, unviewed first, then by date proximity
             # We use ABS(strftime('%s', upload_date) - strftime('%s', ?)) for date proximity
             cursor = conn.execute("""
@@ -113,74 +117,63 @@ class VideoStorage:
             """, (target.channel, target.id, target.upload_date.isoformat(), limit))
             return [self._row_to_video(row) for row in cursor.fetchall()]
 
+    def _exclude_clause(self, exclude_ids: List[str], prefix: str = "AND") -> Tuple[str, List[str]]:
+        if not exclude_ids:
+            return "", []
+        placeholders = ','.join(['?'] * len(exclude_ids))
+        return f"{prefix} id NOT IN ({placeholders}) ", exclude_ids
+
+    def _find_related_unviewed(self, conn: sqlite3.Connection, current_video: Optional[Video], exclude_ids: List[str]) -> Optional[Video]:
+        if not current_video:
+            return None
+        clause, ids = self._exclude_clause(exclude_ids)
+        query = f"SELECT * FROM videos WHERE channel = ? AND viewed = 0 {clause} ORDER BY ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC LIMIT 1"
+        cursor = conn.execute(query, [current_video.channel] + ids + [current_video.upload_date.isoformat()])
+        row = cursor.fetchone()
+        return self._row_to_video(row) if row else None
+
+    def _find_newest_unviewed(self, conn: sqlite3.Connection, exclude_ids: List[str]) -> Optional[Video]:
+        clause, ids = self._exclude_clause(exclude_ids)
+        query = f"SELECT * FROM videos WHERE viewed = 0 {clause} ORDER BY upload_date DESC LIMIT 1"
+        cursor = conn.execute(query, ids)
+        row = cursor.fetchone()
+        return self._row_to_video(row) if row else None
+
+    def _find_related_viewed(self, conn: sqlite3.Connection, current_video: Optional[Video], exclude_ids: List[str]) -> Optional[Video]:
+        if not current_video:
+            return None
+        clause, ids = self._exclude_clause(exclude_ids)
+        query = f"SELECT * FROM videos WHERE channel = ? AND viewed = 1 {clause} ORDER BY ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC LIMIT 1"
+        cursor = conn.execute(query, [current_video.channel] + ids + [current_video.upload_date.isoformat()])
+        row = cursor.fetchone()
+        return self._row_to_video(row) if row else None
+
+    def _find_stable_fallback(self, conn: sqlite3.Connection, exclude_ids: List[str]) -> Optional[Video]:
+        clause, ids = self._exclude_clause(exclude_ids, prefix="WHERE")
+        query = f"SELECT * FROM videos {clause} ORDER BY title ASC, id ASC LIMIT 1"
+        cursor = conn.execute(query, ids)
+        row = cursor.fetchone()
+        return self._row_to_video(row) if row else None
+
     def select_next_video(self, current_id: Optional[str] = None, last_id: Optional[str] = None) -> Optional[Video]:
         exclude_ids = [i for i in [current_id, last_id] if i]
-
         current_video = self.get_video_by_id(current_id) if current_id else None
 
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-
+        with self._connection() as conn:
             # Rule 1: Related Unviewed
-            if current_video:
-                query = "SELECT * FROM videos WHERE channel = ? AND viewed = 0 "
-                params = [current_video.channel]
-                if exclude_ids:
-                    placeholders = ','.join(['?'] * len(exclude_ids))
-                    query += f"AND id NOT IN ({placeholders}) "
-                    params.extend(exclude_ids)
-
-                query += "ORDER BY ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC LIMIT 1"
-                params.append(current_video.upload_date.isoformat())
-
-                cursor = conn.execute(query, params)
-                row = cursor.fetchone()
-                if row:
-                    return self._row_to_video(row)
+            video = self._find_related_unviewed(conn, current_video, exclude_ids)
+            if video:
+                return video
 
             # Rule 3: New tab unviewed (all unviewed, newest first)
-            query = "SELECT * FROM videos WHERE viewed = 0 "
-            params = []
-            if exclude_ids:
-                placeholders = ','.join(['?'] * len(exclude_ids))
-                query += f"AND id NOT IN ({placeholders}) "
-                params.extend(exclude_ids)
-
-            query += "ORDER BY upload_date DESC LIMIT 1"
-            cursor = conn.execute(query, params)
-            row = cursor.fetchone()
-            if row:
-                return self._row_to_video(row)
+            video = self._find_newest_unviewed(conn, exclude_ids)
+            if video:
+                return video
 
             # Rule 4: Related Viewed
-            if current_video:
-                query = "SELECT * FROM videos WHERE channel = ? AND viewed = 1 "
-                params = [current_video.channel]
-                if exclude_ids:
-                    placeholders = ','.join(['?'] * len(exclude_ids))
-                    query += f"AND id NOT IN ({placeholders}) "
-                    params.extend(exclude_ids)
-
-                query += "ORDER BY ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC LIMIT 1"
-                params.append(current_video.upload_date.isoformat())
-
-                cursor = conn.execute(query, params)
-                row = cursor.fetchone()
-                if row:
-                    return self._row_to_video(row)
+            video = self._find_related_viewed(conn, current_video, exclude_ids)
+            if video:
+                return video
 
             # Rule 5: Stable Fallback
-            query = "SELECT * FROM videos "
-            params = []
-            if exclude_ids:
-                placeholders = ','.join(['?'] * len(exclude_ids))
-                query += f"WHERE id NOT IN ({placeholders}) "
-                params.extend(exclude_ids)
-
-            query += "ORDER BY title ASC, id ASC LIMIT 1"
-            cursor = conn.execute(query, params)
-            row = cursor.fetchone()
-            if row:
-                return self._row_to_video(row)
-
-        return None
+            return self._find_stable_fallback(conn, exclude_ids)
