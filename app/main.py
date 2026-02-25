@@ -143,7 +143,7 @@ def main(stdscr: Any) -> None:
 
     while running:
         update_finish_time = update_background_status(app_state, player, storage, update_finish_time)
-        ui.render(app_state, show_help)
+        ui.render(app_state, storage, show_help)
         running, show_help, update_finish_time = handle_input(stdscr, app_state, player, storage, ui, show_help, update_finish_time)
         handle_state_actions(app_state, player, storage)
         time.sleep(0.05)
