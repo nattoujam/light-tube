@@ -18,7 +18,7 @@ class State(Enum):
 class AppState:
     state: State = State.BOOT
     current_tab: str = "New"
-    videos: List[Video] = field(default_factory=list)
+    display_videos: List[Video] = field(default_factory=list)
     selected_video_id: Optional[str] = None
     now_playing: Optional[Video] = None
     mpv_pid: Optional[int] = None
@@ -26,7 +26,6 @@ class AppState:
     update_status: Optional[str] = None
     error_message: Optional[str] = None
     previous_state: Optional[State] = None
-    random_videos: List[Video] = field(default_factory=list)
 
     def handle_event(self, event: Event, **kwargs: Any) -> None:
         if event == Event.QUIT:
@@ -49,9 +48,7 @@ class AppState:
 
     def _handle_boot(self, event: Event, **kwargs: Any) -> None:
         if event == Event.CACHE_LOADED:
-            self.videos = kwargs.get('videos', [])
-            self.random_videos = list(self.videos)
-            random.shuffle(self.random_videos)
+            self.display_videos = kwargs.get('videos', [])
             self.state = State.BROWSE
 
     def _handle_browse(self, event: Event, **kwargs: Any) -> None:
@@ -70,9 +67,12 @@ class AppState:
                 self.current_tab = tabs[(idx + 1) % len(tabs)]
             else:
                 self.current_tab = tabs[(idx - 1) % len(tabs)]
+            # Note: The caller (main.py) is responsible for refreshing display_videos
         elif event == Event.RANDOM_REFRESH:
-            self.random_videos = list(self.videos)
-            random.shuffle(self.random_videos)
+            # Note: The caller (main.py) is responsible for refreshing display_videos
+            pass
+        elif event == Event.CACHE_LOADED:
+            self.display_videos = kwargs.get('videos', [])
 
     def _handle_launching(self, event: Event, **kwargs: Any) -> None:
         if event == Event.MPV_SPAWNED:
@@ -121,16 +121,5 @@ class AppState:
             self.state = State.BROWSE
 
     def get_filtered_videos(self) -> List[Video]:
-        if self.current_tab == "New":
-            return sorted(self.videos, key=lambda x: x.upload_date, reverse=True)
-        elif self.current_tab == "Random":
-            return self.random_videos
-        elif self.current_tab == "Related":
-            if not self.last_played_video_id:
-                return []
-            last_video = next((v for v in self.videos if v.id == self.last_played_video_id), None)
-            if not last_video:
-                return []
-            from .next_logic import get_related_videos
-            return get_related_videos(self.videos, last_video)
-        return self.videos
+        # Now display_videos already contains the filtered list from DB
+        return self.display_videos
