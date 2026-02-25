@@ -2,7 +2,7 @@ import sqlite3
 import os
 import contextlib
 from datetime import datetime
-from typing import List, Optional, Tuple, Any, Iterator
+from typing import List, Optional, Iterator
 from .models import Video
 
 class VideoStorage:
@@ -117,41 +117,65 @@ class VideoStorage:
             """, (target.channel, target.id, target.upload_date.isoformat(), limit))
             return [self._row_to_video(row) for row in cursor.fetchall()]
 
-    def _exclude_clause(self, exclude_ids: List[str], prefix: str = "AND") -> Tuple[str, List[str]]:
-        if not exclude_ids:
-            return "", []
-        placeholders = ','.join(['?'] * len(exclude_ids))
-        return f"{prefix} id NOT IN ({placeholders}) ", exclude_ids
-
     def _find_related_unviewed(self, conn: sqlite3.Connection, current_video: Optional[Video], exclude_ids: List[str]) -> Optional[Video]:
         if not current_video:
             return None
-        clause, ids = self._exclude_clause(exclude_ids)
-        query = f"SELECT * FROM videos WHERE channel = ? AND viewed = 0 {clause} ORDER BY ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC LIMIT 1"
-        cursor = conn.execute(query, [current_video.channel] + ids + [current_video.upload_date.isoformat()])
+
+        query = "SELECT * FROM videos WHERE channel = ? AND viewed = 0 "
+        params = [current_video.channel]
+        if exclude_ids:
+            placeholders = ','.join(['?'] * len(exclude_ids))
+            query += f"AND id NOT IN ({placeholders}) "
+            params.extend(exclude_ids)
+
+        query += "ORDER BY ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC LIMIT 1"
+        params.append(current_video.upload_date.isoformat())
+
+        cursor = conn.execute(query, params)
         row = cursor.fetchone()
         return self._row_to_video(row) if row else None
 
     def _find_newest_unviewed(self, conn: sqlite3.Connection, exclude_ids: List[str]) -> Optional[Video]:
-        clause, ids = self._exclude_clause(exclude_ids)
-        query = f"SELECT * FROM videos WHERE viewed = 0 {clause} ORDER BY upload_date DESC LIMIT 1"
-        cursor = conn.execute(query, ids)
+        query = "SELECT * FROM videos WHERE viewed = 0 "
+        params = []
+        if exclude_ids:
+            placeholders = ','.join(['?'] * len(exclude_ids))
+            query += f"AND id NOT IN ({placeholders}) "
+            params.extend(exclude_ids)
+
+        query += "ORDER BY upload_date DESC LIMIT 1"
+        cursor = conn.execute(query, params)
         row = cursor.fetchone()
         return self._row_to_video(row) if row else None
 
     def _find_related_viewed(self, conn: sqlite3.Connection, current_video: Optional[Video], exclude_ids: List[str]) -> Optional[Video]:
         if not current_video:
             return None
-        clause, ids = self._exclude_clause(exclude_ids)
-        query = f"SELECT * FROM videos WHERE channel = ? AND viewed = 1 {clause} ORDER BY ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC LIMIT 1"
-        cursor = conn.execute(query, [current_video.channel] + ids + [current_video.upload_date.isoformat()])
+
+        query = "SELECT * FROM videos WHERE channel = ? AND viewed = 1 "
+        params = [current_video.channel]
+        if exclude_ids:
+            placeholders = ','.join(['?'] * len(exclude_ids))
+            query += f"AND id NOT IN ({placeholders}) "
+            params.extend(exclude_ids)
+
+        query += "ORDER BY ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC LIMIT 1"
+        params.append(current_video.upload_date.isoformat())
+
+        cursor = conn.execute(query, params)
         row = cursor.fetchone()
         return self._row_to_video(row) if row else None
 
     def _find_stable_fallback(self, conn: sqlite3.Connection, exclude_ids: List[str]) -> Optional[Video]:
-        clause, ids = self._exclude_clause(exclude_ids, prefix="WHERE")
-        query = f"SELECT * FROM videos {clause} ORDER BY title ASC, id ASC LIMIT 1"
-        cursor = conn.execute(query, ids)
+        query = "SELECT * FROM videos "
+        params = []
+        if exclude_ids:
+            placeholders = ','.join(['?'] * len(exclude_ids))
+            query += f"WHERE id NOT IN ({placeholders}) "
+            params.extend(exclude_ids)
+
+        query += "ORDER BY title ASC, id ASC LIMIT 1"
+        cursor = conn.execute(query, params)
         row = cursor.fetchone()
         return self._row_to_video(row) if row else None
 
