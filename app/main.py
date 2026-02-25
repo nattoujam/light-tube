@@ -47,6 +47,9 @@ def update_background_status(app_state: AppState, player: MpvPlayer, storage: Vi
             else:
                 app_state.handle_event(Event.MPV_EXITED)
 
+            # Refresh display videos to show viewed status
+            app_state.handle_event(Event.CACHE_LOADED, videos=get_display_videos(storage, app_state))
+
     if app_state.state == State.UPDATING:
         if update_finish_time and datetime.now() >= update_finish_time:
             app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=0)
@@ -84,15 +87,27 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
     elif key == ord('\n') or key == curses.KEY_ENTER:
         videos = app_state.get_filtered_videos()
         if 0 <= ui.selected_idx < len(videos):
+            if app_state.state == State.PLAYING and app_state.now_playing:
+                app_state.now_playing.viewed = True
+                storage.update_video(app_state.now_playing)
+
             video = videos[ui.selected_idx]
             app_state.handle_event(Event.PLAY_SELECTED, video_id=video.id)
     elif key == ord('n'):
+        if app_state.state == State.PLAYING and app_state.now_playing:
+            app_state.now_playing.viewed = True
+            storage.update_video(app_state.now_playing)
+
         next_video = select_next_video(storage,
                                        current_video_id=app_state.now_playing.id if app_state.now_playing else None,
                                        last_video_id=app_state.last_played_video_id)
         if next_video:
             app_state.handle_event(Event.NEXT, video_id=next_video.id)
     elif key == ord('s'):
+        if app_state.state == State.PLAYING and app_state.now_playing:
+            app_state.now_playing.viewed = True
+            storage.update_video(app_state.now_playing)
+
         player.stop()
         app_state.handle_event(Event.STOP)
         # Refresh display in case "Related" tab needs update after play
