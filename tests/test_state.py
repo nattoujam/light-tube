@@ -15,7 +15,7 @@ def test_boot_to_browse():
     assert state.state == State.BROWSE
 
 def test_browse_to_launching(sample_video):
-    state = AppState(state=State.BROWSE, videos=[sample_video])
+    state = AppState(state=State.BROWSE, display_videos=[sample_video])
     state.handle_event(Event.PLAY_SELECTED, video_id=sample_video.id)
     assert state.state == State.LAUNCHING
     assert state.selected_video_id == sample_video.id
