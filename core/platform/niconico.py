@@ -1,4 +1,5 @@
 import requests
+import urllib.parse
 from datetime import datetime
 from typing import List, Optional
 from .base import PlatformBase, RemoteVideo
@@ -19,31 +20,32 @@ class Niconico(PlatformBase):
         }
 
         # Snapshot API Search by Tag
-        # Use requests.get(url, params=...) but ensure targets/fields are simple strings.
-        # If multiple targets are needed, they should be comma-separated strings.
+        # Use _size instead of _limit (Snapshot API specification)
         params = {
-            "q": external_id, # external_id is the tag string
+            "q": external_id,
             "targets": "tags",
             "fields": "contentId,title,startTime",
             "_sort": "-startTime",
-            "_limit": limit,
+            "_size": limit,
             "_context": "light-tube-app"
         }
 
         if published_before:
-            # filters[startTime][lt]=...
-            # The user pointed out that '&' might be encoded as '%2C'.
-            # In requests, dict params are typically encoded correctly.
-            # But let's be careful with nested keys if any.
             params["filters[startTime][lt]"] = published_before.strftime("%Y-%m-%dT%H:%M:%S+09:00")
 
-        # To avoid any automatic encoding issues that requests might do differently,
-        # we can use a PreparedRequest or just trust requests.get but let's double check.
-        # Actually, %2C is the encoding for ',', not '&'.
-        # If '&' is being encoded as something else, or if ',' is being encoded as '%2C' where it shouldn't be...
-        # The Snapshot API documentation says targets/fields should be comma separated.
+        # Manually construct query string to avoid encoding '&' as '%2C' (as reported)
+        # and to keep brackets in filter keys and commas in field lists unencoded as much as possible.
+        query_parts = []
+        for k, v in params.items():
+            # Only encode values, but allow commas to stay as is in case the API is strict.
+            # Keys like filters[startTime][lt] are kept as is.
+            val = urllib.parse.quote(str(v), safe=',:-')
+            query_parts.append(f"{k}={val}")
 
-        response = requests.get(self.base_url, params=params, headers=headers)
+        query_string = "&".join(query_parts)
+        url = f"{self.base_url}?{query_string}"
+
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
 
