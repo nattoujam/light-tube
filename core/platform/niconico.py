@@ -33,9 +33,15 @@ class Niconico(PlatformBase):
         if published_before:
             params["filters[startTime][lt]"] = published_before.strftime("%Y-%m-%dT%H:%M:%S+09:00")
 
-        # Using standard requests.get with params dictionary.
-        # This is the most robust way to handle encoding for most APIs.
-        response = requests.get(self.base_url, params=params, headers=headers)
+        # Manually construct query string to avoid ampersands/brackets encoding issues.
+        # We keep keys as-is (especially filters[...]) and only quote values.
+        query_parts = []
+        for k, v in params.items():
+            query_parts.append(f"{k}={urllib.parse.quote(str(v))}")
+
+        url = f"{self.base_url}?{'&'.join(query_parts)}"
+
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
 
