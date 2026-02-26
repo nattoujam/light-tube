@@ -43,7 +43,7 @@ class Niconico(PlatformBase):
     def fetch_videos(self, external_id: str, limit: int = 50, published_before: datetime = None) -> List[RemoteVideo]:
         # Search for videos by userId
         params = {
-            "q": "*", # Wildcard search or just use filters
+            "q": "", # Wildcard search or just use filters
             "targets": "title", # Dummy target
             "fields": "contentId,title,startTime",
             "filters[userId][0]": external_id,

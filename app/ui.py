@@ -16,7 +16,8 @@ class Tui:
         self.header_win = curses.newwin(2, self.width, 0, 0)
         self.main_win = curses.newwin(self.height - 5, self.width, 2, 0)
         self.footer_win = curses.newwin(3, self.width, self.height - 3, 0)
-        self.register_win = curses.newwin(10, 60, self.height // 2 - 5, self.width // 2 - 30)
+        self.register_win = curses.newwin(12, 60, self.height // 2 - 6, self.width // 2 - 30)
+        self.error_win = curses.newwin(10, 60, self.height // 2 - 5, self.width // 2 - 30)
         self.help_win = None
 
     def draw_header(self, state: AppState):
@@ -122,6 +123,8 @@ class Tui:
         self.draw_footer(state)
         if state.state == State.REGISTER:
             self.draw_register(state)
+        elif state.state == State.ERROR:
+            self.draw_error(state)
         if show_help:
             self.draw_help()
         curses.doupdate()
@@ -134,10 +137,32 @@ class Tui:
         # Input for platform will be on line 4
         self.register_win.addstr(6, 2, "2. チャンネル名 / ユーザー名 を入力")
         # Input for name will be on line 7
-        self.register_win.addstr(8, 2, "bキーでキャンセル")
+        self.register_win.addstr(9, 2, "bキーでキャンセル")
 
-        # We'll use these just as visual guidance; input will be handled in main.py
+        # エラーメッセージがあれば表示
+        if state.error_message:
+            self.register_win.attron(curses.color_pair(1) if curses.has_colors() else curses.A_BOLD)
+            self.register_win.addstr(10, 2, f"エラー: {state.error_message[:54]}")
+            if curses.has_colors():
+                self.register_win.attroff(curses.color_pair(1))
+
         self.register_win.noutrefresh()
+
+    def draw_error(self, state: AppState):
+        self.error_win.erase()
+        self.error_win.box()
+        self.error_win.attron(curses.A_BOLD)
+        self.error_win.addstr(1, 2, "エラーが発生しました")
+        self.error_win.attroff(curses.A_BOLD)
+
+        msg = state.error_message or "不明なエラー"
+        # メッセージを折り返して表示
+        for i, line in enumerate([msg[i:i+54] for i in range(0, len(msg), 54)]):
+            if i > 5: break
+            self.error_win.addstr(3 + i, 2, line)
+
+        self.error_win.addstr(8, 2, "bキーで戻る")
+        self.error_win.noutrefresh()
 
     def get_input_string(self, prompt: str, y: int, x: int) -> str:
         curses.echo()

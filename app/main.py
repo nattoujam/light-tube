@@ -170,31 +170,41 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
     elif key == ord('a'):
         if app_state.state != State.REGISTER:
             app_state.handle_event(Event.REGISTER)
-            # Handle registration synchronously for now
-            ui.render(app_state) # Show registration box
+            app_state.error_message = None # Clear previous error
 
-            try:
-                platform_key = ui.get_input_string("  入力: ", ui.height // 2 - 1, ui.width // 2 - 20)
-                platform_name = "youtube" if platform_key == "y" else "niconico"
-                channel_name = ui.get_input_string("  入力: ", ui.height // 2 + 2, ui.width // 2 - 20)
+    if app_state.state == State.REGISTER:
+        # Handle registration synchronously for now
+        ui.render(app_state) # Show registration box
 
-                if channel_name:
-                    app_state.handle_event(Event.UPDATE_STARTED)
-                    ui.render(app_state) # Show loading
+        try:
+            platform_key = ui.get_input_string("  入力: ", ui.height // 2 - 2, ui.width // 2 - 20)
+            if not platform_key: # Canceled or Empty
+                 app_state.handle_event(Event.BACK_TO_UI)
+                 return running, show_help, update_finish_time
 
-                    external_id = channel_resolver.resolve(platform_name, channel_name)
-                    channel_id = repository.save_channel(platform_name, channel_name, external_id)
+            platform_name = "youtube" if platform_key == "y" else "niconico"
+            # Redraw to show what was selected or just clear the line if needed
+            ui.render(app_state)
 
-                    # Initial fetch
-                    rvs = video_fetcher.fetch_recent(platform_name, external_id, limit=50)
-                    repository.save_remote_videos(channel_id, platform_name, channel_name, rvs)
+            channel_name = ui.get_input_string("  入力: ", ui.height // 2 + 1, ui.width // 2 - 20)
 
-                    app_state.handle_event(Event.REGISTRATION_SUCCEEDED)
-                    refresh_app_state(app_state, storage)
-                else:
-                    app_state.handle_event(Event.BACK_TO_UI)
-            except Exception as e:
-                app_state.handle_event(Event.REGISTRATION_FAILED, error=str(e))
+            if channel_name:
+                app_state.handle_event(Event.UPDATE_STARTED)
+                ui.render(app_state) # Show loading
+
+                external_id = channel_resolver.resolve(platform_name, channel_name)
+                channel_id = repository.save_channel(platform_name, channel_name, external_id)
+
+                # Initial fetch
+                rvs = video_fetcher.fetch_recent(platform_name, external_id, limit=50)
+                repository.save_remote_videos(channel_id, platform_name, channel_name, rvs)
+
+                app_state.handle_event(Event.REGISTRATION_SUCCEEDED)
+                refresh_app_state(app_state, storage)
+            else:
+                app_state.handle_event(Event.BACK_TO_UI)
+        except Exception as e:
+            app_state.handle_event(Event.REGISTRATION_FAILED, error=str(e))
     elif key == ord('r'):
         app_state.handle_event(Event.RANDOM_REFRESH)
         if app_state.current_tab == "Random":
@@ -219,6 +229,10 @@ def handle_state_actions(app_state: AppState, player: MpvPlayer, storage: VideoS
 
 def main(stdscr: Any) -> None:
     # Setup
+    if curses.has_colors():
+        curses.start_color()
+        curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+
     storage = VideoStorage('videos.db')
     initialize_data(storage)
 
