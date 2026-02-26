@@ -139,8 +139,16 @@ class Tui:
 
     def get_input_string(self, prompt: str, y: int, x: int) -> str:
         curses.echo()
+        curses.curs_set(1)
+        self.stdscr.nodelay(False)
         self.stdscr.addstr(y, x, prompt)
         self.stdscr.refresh()
-        input_str = self.stdscr.getstr(y, x + len(prompt), 50).decode('utf-8')
+        try:
+            input_bytes = self.stdscr.getstr(y, x + len(prompt), 50)
+            input_str = input_bytes.decode('utf-8')
+        except:
+            input_str = ""
+        self.stdscr.nodelay(True)
+        curses.curs_set(0)
         curses.noecho()
         return input_str
