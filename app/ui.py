@@ -3,8 +3,6 @@ from typing import List, Optional, Tuple
 import random
 from .state import AppState, State
 from .models import Video
-from .next_logic import select_next_video
-from .storage import VideoStorage
 
 class Tui:
     def __init__(self, stdscr):
@@ -68,20 +66,20 @@ class Tui:
 
         self.main_win.noutrefresh()
 
-    def draw_footer(self, state: AppState, storage: VideoStorage):
+    def draw_footer(self, state: AppState):
         self.footer_win.erase()
         self.footer_win.box()
 
         status_text = "▶ Ready"
         if state.state == State.LAUNCHING:
-            video = storage.get_video_by_id(state.selected_video_id)
+            video = state.selected_video
             title = video.title if video else "???"
             status_text = f"▶ 起動中… {title}"
         elif state.state == State.PLAYING:
             title = state.now_playing.title if state.now_playing else "???"
             status_text = f"▶ 再生中: {title} [n:Next] [s:Stop] [b:UI]"
         elif state.state == State.AFTER_PLAY:
-            last_video = storage.get_video_by_id(state.last_played_video_id) if state.last_played_video_id else None
+            last_video = state.last_played_video
             title = last_video.title if last_video else "???"
             status_text = f"⏹ 再生終了: {title} [n:Next]"
         elif state.state == State.ERROR:
@@ -90,9 +88,7 @@ class Tui:
         self.footer_win.addstr(1, 2, status_text[:self.width - 4])
 
         # Next info
-        next_video = select_next_video(storage,
-                                       current_video_id=state.now_playing.id if state.now_playing else None,
-                                       last_video_id=state.last_played_video_id)
+        next_video = state.next_video
         if next_video:
             next_text = f"Next: {next_video.title} (n)"
             self.footer_win.addstr(1, max(2, self.width // 2), next_text[:self.width // 2 - 2])
@@ -117,10 +113,10 @@ class Tui:
         self.help_win.addstr(11, 2, "q: Quit")
         self.help_win.noutrefresh()
 
-    def render(self, state: AppState, storage: VideoStorage, show_help: bool = False):
+    def render(self, state: AppState, show_help: bool = False):
         self.draw_header(state)
         self.draw_main_area(state)
-        self.draw_footer(state, storage)
+        self.draw_footer(state)
         if show_help:
             self.draw_help()
         curses.doupdate()

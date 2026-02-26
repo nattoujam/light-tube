@@ -19,10 +19,11 @@ class AppState:
     state: State = State.BOOT
     current_tab: str = "New"
     display_videos: List[Video] = field(default_factory=list)
-    selected_video_id: Optional[str] = None
+    selected_video: Optional[Video] = None
+    next_video: Optional[Video] = None
     now_playing: Optional[Video] = None
     mpv_pid: Optional[int] = None
-    last_played_video_id: Optional[str] = None
+    last_played_video: Optional[Video] = None
     update_status: Optional[str] = None
     error_message: Optional[str] = None
     previous_state: Optional[State] = None
@@ -54,9 +55,9 @@ class AppState:
 
     def _handle_browse(self, event: Event, **kwargs: Any) -> None:
         if event == Event.PLAY_SELECTED or event == Event.NEXT:
-            video_id = kwargs.get('video_id')
-            if video_id:
-                self.selected_video_id = video_id
+            video = kwargs.get('video')
+            if video:
+                self.selected_video = video
                 self.state = State.LAUNCHING
         elif event == Event.UPDATE:
             self.previous_state = self.state
@@ -84,25 +85,25 @@ class AppState:
 
     def _handle_playing(self, event: Event, **kwargs: Any) -> None:
         if event == Event.MPV_EXITED:
-            self.last_played_video_id = self.now_playing.id if self.now_playing else None
+            self.last_played_video = self.now_playing
             self.now_playing = None
             self.mpv_pid = None
             self.state = State.AFTER_PLAY
         elif event == Event.STOP:
             self.state = State.AFTER_PLAY
         elif event == Event.PLAY_SELECTED or event == Event.NEXT:
-            video_id = kwargs.get('video_id')
-            if video_id:
-                self.selected_video_id = video_id
+            video = kwargs.get('video')
+            if video:
+                self.selected_video = video
                 self.state = State.LAUNCHING
         elif event == Event.BACK_TO_UI:
             pass
 
     def _handle_after_play(self, event: Event, **kwargs: Any) -> None:
         if event == Event.PLAY_SELECTED or event == Event.NEXT:
-            video_id = kwargs.get('video_id')
-            if video_id:
-                self.selected_video_id = video_id
+            video = kwargs.get('video')
+            if video:
+                self.selected_video = video
                 self.state = State.LAUNCHING
         elif event == Event.BACK_TO_UI:
             self.state = State.BROWSE
