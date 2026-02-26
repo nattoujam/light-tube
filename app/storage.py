@@ -22,7 +22,7 @@ class VideoStorage:
                     created_at TEXT NOT NULL
                 )
             """)
-            # Table: videos (migration check)
+            # Table: videos
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS videos (
                     id TEXT PRIMARY KEY,
@@ -31,24 +31,14 @@ class VideoStorage:
                     upload_date TEXT NOT NULL,
                     url TEXT NOT NULL,
                     viewed INTEGER DEFAULT 0,
-                    started_at TEXT
+                    started_at TEXT,
+                    channel_id INTEGER,
+                    platform TEXT,
+                    video_id TEXT,
+                    created_at TEXT,
+                    FOREIGN KEY(channel_id) REFERENCES channels(id)
                 )
             """)
-
-            # Migration: add missing columns if needed
-            cursor = conn.execute("PRAGMA table_info(videos)")
-            existing_columns = [row['name'] for row in cursor.fetchall()]
-
-            missing_columns = {
-                'channel_id': 'INTEGER',
-                'platform': 'TEXT',
-                'video_id': 'TEXT',
-                'created_at': 'TEXT'
-            }
-
-            for col, col_type in missing_columns.items():
-                if col not in existing_columns:
-                    conn.execute(f"ALTER TABLE videos ADD COLUMN {col} {col_type}")
 
             # Ensure UNIQUE constraint on url (watch_url)
             conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_url ON videos(url)")
