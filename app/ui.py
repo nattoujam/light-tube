@@ -136,7 +136,7 @@ class Tui:
         self.register_win.addstr(1, 2, "チャンネル登録", curses.A_BOLD)
         self.register_win.addstr(3, 2, "1. プラットフォームを選択 (y: YouTube / n: ニコニコ)")
         # Input for platform will be on line 4
-        self.register_win.addstr(6, 2, "2. チャンネル名 / ユーザー名 を入力")
+        self.register_win.addstr(6, 2, "2. チャンネル名(YT) / タグ名(ニコニコ) を入力")
         # Input for name will be on line 7
         self.register_win.addstr(9, 2, "bキーでキャンセル")
 

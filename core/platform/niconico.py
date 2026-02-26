@@ -8,41 +8,21 @@ class Niconico(PlatformBase):
         self.base_url = base_url
 
     def resolve_external_id(self, name: str) -> str:
-        # If the input is already a user ID (numeric), return it directly.
-        if name.isdigit():
-            return name
-
-        # Search for videos with the name and get userId
-        headers = {
-            "User-Agent": "light-tube-app/0.1.0"
-        }
-
-        # Try to find user ID by searching for videos with the given name.
-        params = {
-            "q": name,
-            "targets": "title,description,tags",
-            "fields": "userId",
-            "_sort": "-startTime",
-            "_limit": 1,
-            "_context": "light-tube-app"
-        }
-        response = requests.get(self.base_url, params=params, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        if not data.get("data"):
-            raise ValueError(f"User not found or has no videos: {name}")
-        return str(data["data"][0]["userId"])
+        # Use the input directly as a tag.
+        return name
 
     def fetch_videos(self, external_id: str, limit: int = 50, published_before: datetime = None) -> List[RemoteVideo]:
-        # Search for videos by userId
+        # Search for videos by tag
+        # Use a browser-like User-Agent to avoid 403
         headers = {
-            "User-Agent": "light-tube-app/0.1.0"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
+
+        # Snapshot API Search by Tag
         params = {
-            "q": "", # Wildcard search or just use filters
-            "targets": "title", # Dummy target
+            "q": external_id, # external_id is the tag string
+            "targets": "tags",
             "fields": "contentId,title,startTime",
-            "filters[userId][0]": external_id,
             "_sort": "-startTime",
             "_limit": limit,
             "_context": "light-tube-app"
@@ -50,6 +30,7 @@ class Niconico(PlatformBase):
 
         if published_before:
             # filters[startTime][lt]=...
+            # Note: Using tag search, we might still want to use filters for published date
             params["filters[startTime][lt]"] = published_before.strftime("%Y-%m-%dT%H:%M:%S+09:00")
 
         response = requests.get(self.base_url, params=params, headers=headers)
