@@ -2,8 +2,8 @@ from typing import Dict
 from datetime import datetime
 import yaml
 from .platform.base import PlatformBase
-from .platform.platform_a import PlatformA
-from .platform.platform_b import PlatformB
+from .platform.youtube import YouTube
+from .platform.niconico import Niconico
 
 class PlatformFactory:
     def __init__(self, config_path: str):
@@ -11,12 +11,12 @@ class PlatformFactory:
             self.config = yaml.safe_load(f)
 
     def get_platform(self, platform_name: str) -> PlatformBase:
-        if platform_name == "platform_a":
-            api_key = self.config["platform_a"]["api_key"]
-            return PlatformA(api_key)
-        elif platform_name == "platform_b":
-            base_url = self.config["platform_b"]["base_url"]
-            return PlatformB(base_url)
+        if platform_name == "youtube":
+            api_key = self.config["youtube"]["api_key"]
+            return YouTube(api_key)
+        elif platform_name == "niconico":
+            base_url = self.config["niconico"]["base_url"]
+            return Niconico(base_url)
         else:
             raise ValueError(f"Unknown platform: {platform_name}")
 

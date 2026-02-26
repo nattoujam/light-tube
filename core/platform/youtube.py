@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List, Optional
 from .base import PlatformBase, RemoteVideo
 
-class PlatformA(PlatformBase):
+class YouTube(PlatformBase):
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.base_url = "https://www.googleapis.com/youtube/v3"

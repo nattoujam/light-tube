@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List, Optional
 from .base import PlatformBase, RemoteVideo
 
-class PlatformB(PlatformBase):
+class Niconico(PlatformBase):
     def __init__(self, base_url: str):
         self.base_url = base_url
 

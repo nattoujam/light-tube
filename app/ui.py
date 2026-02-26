@@ -129,10 +129,10 @@ class Tui:
     def draw_register(self, state: AppState):
         self.register_win.erase()
         self.register_win.box()
-        self.register_win.addstr(1, 2, "Channel Registration", curses.A_BOLD)
-        self.register_win.addstr(3, 2, "1. Platform (a: PlatformA, b: PlatformB)")
-        self.register_win.addstr(4, 2, "2. Channel Name / User Name")
-        self.register_win.addstr(6, 2, "Press 'Enter' to confirm, 'Esc/b' to cancel")
+        self.register_win.addstr(1, 2, "チャンネル登録", curses.A_BOLD)
+        self.register_win.addstr(3, 2, "1. プラットフォーム (y: YouTube, n: ニコニコ)")
+        self.register_win.addstr(4, 2, "2. チャンネル名 / ユーザー名")
+        self.register_win.addstr(6, 2, "Enterで確定、Esc/bでキャンセル")
 
         # We'll use these just as visual guidance; input will be handled in main.py
         self.register_win.noutrefresh()

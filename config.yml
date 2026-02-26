@@ -1,5 +1,5 @@
-platform_a:
-  api_key: "YOUR_PLATFORM_A_API_KEY_HERE"
-platform_b:
+youtube:
+  api_key: "YOUR_YOUTUBE_API_KEY_HERE"
+niconico:
   # No API key required for now
   base_url: "https://api.search.nicovideo.jp/api/v2/snapshot/video/contents/search"

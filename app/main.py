@@ -174,9 +174,9 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
             ui.render(app_state) # Show registration box
 
             try:
-                platform_key = ui.get_input_string("Platform (a/b): ", ui.height // 2 - 1, ui.width // 2 - 20)
-                platform_name = "platform_a" if platform_key == "a" else "platform_b"
-                channel_name = ui.get_input_string("Channel/User Name: ", ui.height // 2, ui.width // 2 - 20)
+                platform_key = ui.get_input_string("プラットフォーム (y/n): ", ui.height // 2 - 1, ui.width // 2 - 20)
+                platform_name = "youtube" if platform_key == "y" else "niconico"
+                channel_name = ui.get_input_string("チャンネル名/ユーザー名: ", ui.height // 2, ui.width // 2 - 20)
 
                 if channel_name:
                     app_state.handle_event(Event.UPDATE_STARTED)
