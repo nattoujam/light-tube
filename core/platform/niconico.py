@@ -13,12 +13,14 @@ class Niconico(PlatformBase):
 
     def fetch_videos(self, external_id: str, limit: int = 50, published_before: datetime = None) -> List[RemoteVideo]:
         # Search for videos by tag
-        # Use a browser-like User-Agent to avoid 403
+        # Use application name as User-Agent as required by niconico API.
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "light-tube-app/0.1.0"
         }
 
         # Snapshot API Search by Tag
+        # Use requests.get(url, params=...) but ensure targets/fields are simple strings.
+        # If multiple targets are needed, they should be comma-separated strings.
         params = {
             "q": external_id, # external_id is the tag string
             "targets": "tags",
@@ -30,8 +32,16 @@ class Niconico(PlatformBase):
 
         if published_before:
             # filters[startTime][lt]=...
-            # Note: Using tag search, we might still want to use filters for published date
+            # The user pointed out that '&' might be encoded as '%2C'.
+            # In requests, dict params are typically encoded correctly.
+            # But let's be careful with nested keys if any.
             params["filters[startTime][lt]"] = published_before.strftime("%Y-%m-%dT%H:%M:%S+09:00")
+
+        # To avoid any automatic encoding issues that requests might do differently,
+        # we can use a PreparedRequest or just trust requests.get but let's double check.
+        # Actually, %2C is the encoding for ',', not '&'.
+        # If '&' is being encoded as something else, or if ',' is being encoded as '%2C' where it shouldn't be...
+        # The Snapshot API documentation says targets/fields should be comma separated.
 
         response = requests.get(self.base_url, params=params, headers=headers)
         response.raise_for_status()

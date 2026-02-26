@@ -10,7 +10,7 @@ class YouTube(PlatformBase):
 
     def resolve_external_id(self, name: str) -> str:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "light-tube-app/0.1.0"
         }
         params = {
             "part": "snippet",
@@ -28,7 +28,7 @@ class YouTube(PlatformBase):
 
     def fetch_videos(self, external_id: str, limit: int = 50, published_before: datetime = None) -> List[RemoteVideo]:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "light-tube-app/0.1.0"
         }
         params = {
             "part": "snippet",
