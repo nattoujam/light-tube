@@ -32,7 +32,6 @@ def test_playing_to_afterplay(sample_video):
     state.handle_event(Event.MPV_EXITED)
     assert state.state == State.AFTER_PLAY
     assert state.last_played_video == sample_video
-    assert state.last_played_video_id == sample_video.id
     assert state.now_playing is None
 
 def test_launching_error():

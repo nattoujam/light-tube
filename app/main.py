@@ -37,7 +37,7 @@ def refresh_app_state(app_state: AppState, storage: VideoStorage) -> None:
 
     app_state.next_video = select_next_video(storage,
                                             current_video_id=current_id,
-                                            last_video_id=app_state.last_played_video_id)
+                                            last_video_id=app_state.last_played_video.id if app_state.last_played_video else None)
 
 def get_display_videos(storage: VideoStorage, app_state: AppState) -> List[Video]:
     if app_state.current_tab == "New":
@@ -45,8 +45,8 @@ def get_display_videos(storage: VideoStorage, app_state: AppState) -> List[Video
     elif app_state.current_tab == "Random":
         return storage.get_random_videos(100)
     elif app_state.current_tab == "Related":
-        if app_state.last_played_video_id:
-            return storage.get_related_videos(app_state.last_played_video_id, 100)
+        if app_state.last_played_video:
+            return storage.get_related_videos(app_state.last_played_video.id, 100)
         return []
     return []
 

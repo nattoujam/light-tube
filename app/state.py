@@ -24,7 +24,6 @@ class AppState:
     now_playing: Optional[Video] = None
     mpv_pid: Optional[int] = None
     last_played_video: Optional[Video] = None
-    last_played_video_id: Optional[str] = None
     update_status: Optional[str] = None
     error_message: Optional[str] = None
     previous_state: Optional[State] = None
@@ -87,7 +86,6 @@ class AppState:
     def _handle_playing(self, event: Event, **kwargs: Any) -> None:
         if event == Event.MPV_EXITED:
             self.last_played_video = self.now_playing
-            self.last_played_video_id = self.now_playing.id if self.now_playing else None
             self.now_playing = None
             self.mpv_pid = None
             self.state = State.AFTER_PLAY
