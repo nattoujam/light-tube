@@ -8,20 +8,16 @@ class Niconico(PlatformBase):
         self.base_url = base_url
 
     def resolve_external_id(self, name: str) -> str:
-        # Search for videos with the name and get userId
-        params = {
-            "q": name,
-            "targets": "title,description,tags",
-            "fields": "userId",
-            "filters[userId][0]": "0", # Dummy filter to satisfy some API quirks or just search
-            "_sort": "-startTime",
-            "_context": "light-tube-app"
-        }
-        # Actually, the snapshot API doesn't support searching users directly.
-        # But if the user has videos, we can find one and get their userId.
-        # This is a bit hacky but follows the "use search API" instruction.
+        # If the input is already a user ID (numeric), return it directly.
+        if name.isdigit():
+            return name
 
-        # Let's try a simpler query first.
+        # Search for videos with the name and get userId
+        headers = {
+            "User-Agent": "light-tube-app/0.1.0"
+        }
+
+        # Try to find user ID by searching for videos with the given name.
         params = {
             "q": name,
             "targets": "title,description,tags",
@@ -30,18 +26,18 @@ class Niconico(PlatformBase):
             "_limit": 1,
             "_context": "light-tube-app"
         }
-        response = requests.get(self.base_url, params=params)
+        response = requests.get(self.base_url, params=params, headers=headers)
         response.raise_for_status()
         data = response.json()
         if not data.get("data"):
-            # Try to see if name is already a userId (numeric)
-            if name.isdigit():
-                return name
             raise ValueError(f"User not found or has no videos: {name}")
         return str(data["data"][0]["userId"])
 
     def fetch_videos(self, external_id: str, limit: int = 50, published_before: datetime = None) -> List[RemoteVideo]:
         # Search for videos by userId
+        headers = {
+            "User-Agent": "light-tube-app/0.1.0"
+        }
         params = {
             "q": "", # Wildcard search or just use filters
             "targets": "title", # Dummy target
@@ -56,7 +52,7 @@ class Niconico(PlatformBase):
             # filters[startTime][lt]=...
             params["filters[startTime][lt]"] = published_before.strftime("%Y-%m-%dT%H:%M:%S+09:00")
 
-        response = requests.get(self.base_url, params=params)
+        response = requests.get(self.base_url, params=params, headers=headers)
         response.raise_for_status()
         data = response.json()
 

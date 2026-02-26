@@ -85,7 +85,8 @@ class Tui:
             title = last_video.title if last_video else "???"
             status_text = f"⏹ 再生終了: {title} [n:Next]"
         elif state.state == State.ERROR:
-            status_text = f"⚠ Error: {state.error_message}"
+            # エラーメッセージはモーダルで表示するため、フッターには表示しない
+            status_text = "⚠ エラーが発生しました"
 
         self.footer_win.addstr(1, 2, status_text[:self.width - 4])
 

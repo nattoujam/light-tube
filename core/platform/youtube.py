@@ -9,6 +9,9 @@ class YouTube(PlatformBase):
         self.base_url = "https://www.googleapis.com/youtube/v3"
 
     def resolve_external_id(self, name: str) -> str:
+        headers = {
+            "User-Agent": "light-tube-app/0.1.0"
+        }
         params = {
             "part": "snippet",
             "q": name,
@@ -16,7 +19,7 @@ class YouTube(PlatformBase):
             "key": self.api_key,
             "maxResults": 1
         }
-        response = requests.get(f"{self.base_url}/search", params=params)
+        response = requests.get(f"{self.base_url}/search", params=params, headers=headers)
         response.raise_for_status()
         data = response.json()
         if not data.get("items"):
@@ -24,6 +27,9 @@ class YouTube(PlatformBase):
         return data["items"][0]["snippet"]["channelId"]
 
     def fetch_videos(self, external_id: str, limit: int = 50, published_before: datetime = None) -> List[RemoteVideo]:
+        headers = {
+            "User-Agent": "light-tube-app/0.1.0"
+        }
         params = {
             "part": "snippet",
             "channelId": external_id,
@@ -35,7 +41,7 @@ class YouTube(PlatformBase):
         if published_before:
             params["publishedBefore"] = published_before.isoformat() + "Z"
 
-        response = requests.get(f"{self.base_url}/search", params=params)
+        response = requests.get(f"{self.base_url}/search", params=params, headers=headers)
         response.raise_for_status()
         data = response.json()
 
