@@ -16,6 +16,7 @@ class Tui:
         self.header_win = curses.newwin(2, self.width, 0, 0)
         self.main_win = curses.newwin(self.height - 5, self.width, 2, 0)
         self.footer_win = curses.newwin(3, self.width, self.height - 3, 0)
+        self.register_win = curses.newwin(10, 60, self.height // 2 - 5, self.width // 2 - 30)
         self.help_win = None
 
     def draw_header(self, state: AppState):
@@ -24,8 +25,8 @@ class Tui:
         app_name = "Lightweight Video Player"
         tab_info = f"Tab: [{state.current_tab}]"
         status = state.update_status if state.update_status else ""
-        if state.state == State.UPDATING:
-            status = "更新中..."
+        if state.state == State.UPDATING or state.state == State.LOADING:
+            status = "処理中..."
 
         line = f" {app_name} | {tab_info} | {status}"
         self.header_win.addstr(0, 0, line.ljust(self.width))
@@ -106,17 +107,40 @@ class Tui:
         self.help_win.addstr(4, 2, "Tab: Switch Tab")
         self.help_win.addstr(5, 2, "n: Next")
         self.help_win.addstr(6, 2, "s: Stop")
-        self.help_win.addstr(7, 2, "u: Update")
-        self.help_win.addstr(8, 2, "r: Random Refresh")
-        self.help_win.addstr(9, 2, "b: Back to UI")
-        self.help_win.addstr(10, 2, "h: Toggle Help")
-        self.help_win.addstr(11, 2, "q: Quit")
+        self.help_win.addstr(7, 2, "u: Update Latest")
+        self.help_win.addstr(8, 2, "i: Update History")
+        self.help_win.addstr(9, 2, "a: Add Channel")
+        self.help_win.addstr(10, 2, "r: Random Refresh")
+        self.help_win.addstr(11, 2, "b: Back to UI")
+        self.help_win.addstr(12, 2, "h: Toggle Help")
+        self.help_win.addstr(13, 2, "q: Quit")
         self.help_win.noutrefresh()
 
     def render(self, state: AppState, show_help: bool = False):
         self.draw_header(state)
         self.draw_main_area(state)
         self.draw_footer(state)
+        if state.state == State.REGISTER:
+            self.draw_register(state)
         if show_help:
             self.draw_help()
         curses.doupdate()
+
+    def draw_register(self, state: AppState):
+        self.register_win.erase()
+        self.register_win.box()
+        self.register_win.addstr(1, 2, "Channel Registration", curses.A_BOLD)
+        self.register_win.addstr(3, 2, "1. Platform (a: PlatformA, b: PlatformB)")
+        self.register_win.addstr(4, 2, "2. Channel Name / User Name")
+        self.register_win.addstr(6, 2, "Press 'Enter' to confirm, 'Esc/b' to cancel")
+
+        # We'll use these just as visual guidance; input will be handled in main.py
+        self.register_win.noutrefresh()
+
+    def get_input_string(self, prompt: str, y: int, x: int) -> str:
+        curses.echo()
+        self.stdscr.addstr(y, x, prompt)
+        self.stdscr.refresh()
+        input_str = self.stdscr.getstr(y, x + len(prompt), 50).decode('utf-8')
+        curses.noecho()
+        return input_str

@@ -9,6 +9,8 @@ from .storage import VideoStorage
 from .player import MpvPlayer, MPV_EXIT_CODE_NEXT
 from .ui import Tui
 from .next_logic import select_next_video
+from core.video_fetcher import VideoFetcher, PlatformFactory, ChannelResolver
+from core.repository import Repository
 
 def initialize_data(storage: VideoStorage) -> None:
     # Use compat property 'videos' or just check if any record exists
@@ -50,7 +52,7 @@ def get_display_videos(storage: VideoStorage, app_state: AppState) -> List[Video
         return []
     return []
 
-def update_background_status(app_state: AppState, player: MpvPlayer, storage: VideoStorage, update_finish_time: Optional[datetime]) -> Optional[datetime]:
+def update_background_status(app_state: AppState, player: MpvPlayer, storage: VideoStorage, update_finish_time: Optional[datetime], video_fetcher: VideoFetcher, repository: Repository) -> Optional[datetime]:
     if app_state.state == State.PLAYING:
         exit_code = player.poll_exit_code()
         if exit_code is not None:
@@ -67,14 +69,33 @@ def update_background_status(app_state: AppState, player: MpvPlayer, storage: Vi
             refresh_app_state(app_state, storage)
 
     if app_state.state == State.UPDATING:
+        # Note: In a real app, this should be in a separate thread.
+        # But here we do it synchronously for simplicity in this prototype.
+        # We only do it once when update_finish_time is set to something in the future.
         if update_finish_time and datetime.now() >= update_finish_time:
-            app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=0)
-            # Refresh current display after update
+            from .ui import Tui # Avoid circular if any, though it's already imported at top
+            # We want to make sure the "Updating" status is visible
+            # In some cases we might need an explicit render here if we want to be sure
+            added_total = 0
+            channels = storage.get_channels()
+            for channel in channels:
+                try:
+                    latest_date = repository.get_latest_video_date(channel.id)
+                    # For "u" (Update Latest), we just fetch the newest 50.
+                    # Duplicate prevention is handled by repository.save_remote_videos.
+                    rvs = video_fetcher.fetch_recent(channel.platform, channel.external_id, limit=50)
+                    added = repository.save_remote_videos(channel.id, channel.platform, channel.name, rvs)
+                    added_total += added
+                except Exception as e:
+                    app_state.handle_event(Event.UPDATE_FAILED, error=str(e))
+                    return None
+
+            app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=added_total)
             refresh_app_state(app_state, storage)
             return None
     return update_finish_time
 
-def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: VideoStorage, ui: Tui, show_help: bool, update_finish_time: Optional[datetime]) -> tuple[bool, bool, Optional[datetime]]:
+def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: VideoStorage, ui: Tui, show_help: bool, update_finish_time: Optional[datetime], video_fetcher: VideoFetcher, repository: Repository, channel_resolver: ChannelResolver) -> tuple[bool, bool, Optional[datetime]]:
     running = True
     try:
         key = stdscr.getch()
@@ -125,7 +146,55 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
     elif key == ord('u'):
         if app_state.state != State.UPDATING:
             app_state.handle_event(Event.UPDATE)
-            update_finish_time = datetime.now() + timedelta(seconds=1)
+            update_finish_time = datetime.now() + timedelta(milliseconds=100)
+    elif key == ord('i'):
+        # Update history for the current selected channel
+        videos = app_state.get_filtered_videos()
+        if 0 <= ui.selected_idx < len(videos):
+            video = videos[ui.selected_idx]
+            if video.channel_id:
+                channel = storage.get_channel_by_id(video.channel_id)
+                if channel:
+                    app_state.handle_event(Event.HISTORY_UPDATE)
+                    ui.render(app_state)
+                    try:
+                        oldest_date = repository.get_oldest_video_date(video.channel_id)
+                        # Fetch videos published before the oldest one we have
+                        # Use channel.external_id instead of video.video_id
+                        rvs = video_fetcher.fetch_history(channel.platform, channel.external_id, published_before=oldest_date, limit=50)
+                        added = repository.save_remote_videos(channel.id, channel.platform, channel.name, rvs)
+                        app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=added)
+                        refresh_app_state(app_state, storage)
+                    except Exception as e:
+                        app_state.handle_event(Event.UPDATE_FAILED, error=str(e))
+    elif key == ord('a'):
+        if app_state.state != State.REGISTER:
+            app_state.handle_event(Event.REGISTER)
+            # Handle registration synchronously for now
+            ui.render(app_state) # Show registration box
+
+            try:
+                platform_key = ui.get_input_string("Platform (a/b): ", ui.height // 2 - 1, ui.width // 2 - 20)
+                platform_name = "platform_a" if platform_key == "a" else "platform_b"
+                channel_name = ui.get_input_string("Channel/User Name: ", ui.height // 2, ui.width // 2 - 20)
+
+                if channel_name:
+                    app_state.handle_event(Event.UPDATE_STARTED)
+                    ui.render(app_state) # Show loading
+
+                    external_id = channel_resolver.resolve(platform_name, channel_name)
+                    channel_id = repository.save_channel(platform_name, channel_name, external_id)
+
+                    # Initial fetch
+                    rvs = video_fetcher.fetch_recent(platform_name, external_id, limit=50)
+                    repository.save_remote_videos(channel_id, platform_name, channel_name, rvs)
+
+                    app_state.handle_event(Event.REGISTRATION_SUCCEEDED)
+                    refresh_app_state(app_state, storage)
+                else:
+                    app_state.handle_event(Event.BACK_TO_UI)
+            except Exception as e:
+                app_state.handle_event(Event.REGISTRATION_FAILED, error=str(e))
     elif key == ord('r'):
         app_state.handle_event(Event.RANDOM_REFRESH)
         if app_state.current_tab == "Random":
@@ -153,6 +222,11 @@ def main(stdscr: Any) -> None:
     storage = VideoStorage('videos.db')
     initialize_data(storage)
 
+    factory = PlatformFactory('config.yml')
+    video_fetcher = VideoFetcher(factory)
+    repository = Repository(storage)
+    channel_resolver = ChannelResolver(factory)
+
     app_state = AppState()
     # Initial load
     refresh_app_state(app_state, storage)
@@ -166,9 +240,9 @@ def main(stdscr: Any) -> None:
     update_finish_time = None
 
     while running:
-        update_finish_time = update_background_status(app_state, player, storage, update_finish_time)
+        update_finish_time = update_background_status(app_state, player, storage, update_finish_time, video_fetcher, repository)
         ui.render(app_state, show_help)
-        running, show_help, update_finish_time = handle_input(stdscr, app_state, player, storage, ui, show_help, update_finish_time)
+        running, show_help, update_finish_time = handle_input(stdscr, app_state, player, storage, ui, show_help, update_finish_time, video_fetcher, repository, channel_resolver)
         handle_state_actions(app_state, player, storage)
         time.sleep(0.05)
 
