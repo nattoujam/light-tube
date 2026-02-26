@@ -130,9 +130,11 @@ class Tui:
         self.register_win.erase()
         self.register_win.box()
         self.register_win.addstr(1, 2, "チャンネル登録", curses.A_BOLD)
-        self.register_win.addstr(3, 2, "1. プラットフォーム (y: YouTube, n: ニコニコ)")
-        self.register_win.addstr(4, 2, "2. チャンネル名 / ユーザー名")
-        self.register_win.addstr(6, 2, "Enterで確定、Esc/bでキャンセル")
+        self.register_win.addstr(3, 2, "1. プラットフォームを選択 (y: YouTube / n: ニコニコ)")
+        # Input for platform will be on line 4
+        self.register_win.addstr(6, 2, "2. チャンネル名 / ユーザー名 を入力")
+        # Input for name will be on line 7
+        self.register_win.addstr(8, 2, "bキーでキャンセル")
 
         # We'll use these just as visual guidance; input will be handled in main.py
         self.register_win.noutrefresh()
