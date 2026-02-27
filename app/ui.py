@@ -9,7 +9,6 @@ class Tui:
         self.stdscr = stdscr
         curses.curs_set(0)
         self.height, self.width = stdscr.getmaxyx()
-        self.selected_idx = 0
         self.scroll_offset = 0
 
         # Initialize windows once to avoid memory leaks
@@ -41,10 +40,10 @@ class Tui:
             self.main_win.addstr(1, 2, "No videos found.")
         else:
             # Adjust scroll offset if necessary
-            if self.selected_idx < self.scroll_offset:
-                self.scroll_offset = self.selected_idx
-            elif self.selected_idx >= self.scroll_offset + main_height:
-                self.scroll_offset = self.selected_idx - main_height + 1
+            if state.selected_idx < self.scroll_offset:
+                self.scroll_offset = state.selected_idx
+            elif state.selected_idx >= self.scroll_offset + main_height:
+                self.scroll_offset = state.selected_idx - main_height + 1
 
             for i in range(main_height):
                 video_idx = i + self.scroll_offset
@@ -52,12 +51,12 @@ class Tui:
                     break
 
                 video = videos[video_idx]
-                prefix = ">" if video_idx == self.selected_idx else " "
+                prefix = ">" if video_idx == state.selected_idx else " "
                 viewed_mark = "[v]" if video.viewed else "[ ]"
                 title = video.title[:self.width - 25]
                 line = f"{prefix} {viewed_mark} {title} ({video.channel})"
 
-                if video_idx == self.selected_idx:
+                if video_idx == state.selected_idx:
                     self.main_win.attron(curses.A_REVERSE)
                     self.main_win.addstr(i, 0, line.ljust(self.width))
                     self.main_win.attroff(curses.A_REVERSE)
@@ -113,10 +112,10 @@ class Tui:
         self.help_win.addstr(11, 2, "q: Quit")
         self.help_win.noutrefresh()
 
-    def render(self, state: AppState, show_help: bool = False):
+    def render(self, state: AppState):
         self.draw_header(state)
         self.draw_main_area(state)
         self.draw_footer(state)
-        if show_help:
+        if state.show_help:
             self.draw_help()
         curses.doupdate()

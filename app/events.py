@@ -10,6 +10,8 @@ class Event(Enum):
     RANDOM_REFRESH = auto()
     TAB_NEXT = auto()
     TAB_PREV = auto()
+    CURSOR_UP = auto()
+    CURSOR_DOWN = auto()
     HELP_TOGGLE = auto()
     QUIT = auto()
 
