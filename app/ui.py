@@ -56,15 +56,24 @@ class Tui:
                 video = videos[video_idx]
                 prefix = ">" if video_idx == self.selected_idx else " "
                 viewed_mark = "[v]" if video.viewed else "[ ]"
-                title = video.title[:self.width - 25]
-                line = f"{prefix} {viewed_mark} {title} ({video.channel})"
+
+                # Calculate max title length to avoid overflow
+                # Space for prefix(2), viewed_mark(4), space(1), channel(varies), parens(2)
+                channel_info = f"({video.channel})"
+                available_width = self.width - 10 - len(channel_info)
+                title = self._truncate_with_width(video.title, available_width)
+                line = f"{prefix} {viewed_mark} {title} {channel_info}"
+
+                # Avoid writing to the last column of the last line to prevent ERR
+                display_line = self._truncate_with_width(line, self.width - 1)
 
                 if video_idx == self.selected_idx:
                     self.main_win.attron(curses.A_REVERSE)
-                    self.main_win.addstr(i, 0, line.ljust(self.width))
+                    # Use ljust up to width-1 to avoid the problematic last cell
+                    self.main_win.addstr(i, 0, display_line.ljust(self.width - 1))
                     self.main_win.attroff(curses.A_REVERSE)
                 else:
-                    self.main_win.addstr(i, 0, line)
+                    self.main_win.addstr(i, 0, display_line)
 
         self.main_win.noutrefresh()
 
