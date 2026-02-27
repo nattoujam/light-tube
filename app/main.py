@@ -97,13 +97,31 @@ def update_background_status(app_state: AppState, player: MpvPlayer, storage: Vi
 
 def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: VideoStorage, ui: Tui, show_help: bool, update_finish_time: Optional[datetime], video_fetcher: VideoFetcher, repository: Repository, channel_resolver: ChannelResolver) -> tuple[bool, bool, Optional[datetime]]:
     running = True
-    try:
-        key = stdscr.getch()
-    except:
-        key = -1
 
-    if key == -1:
+    # Process all pending input to prevent "slippery" scrolling
+    keys = []
+    while True:
+        try:
+            k = stdscr.getch()
+            if k == -1:
+                break
+            keys.append(k)
+        except:
+            break
+
+    if not keys:
         return running, show_help, update_finish_time
+
+    # Find the last key, but ensure 'q' or other critical keys aren't missed
+    # For scrolling, we only care about the net result or the most recent intent
+    last_key = keys[-1]
+
+    # Check for quit in the whole buffer
+    if any(k == ord('q') for k in keys):
+        player.stop()
+        return False, show_help, update_finish_time
+
+    key = last_key
 
     if key == ord('q'):
         player.stop()
