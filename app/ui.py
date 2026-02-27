@@ -68,6 +68,19 @@ class Tui:
 
         self.main_win.noutrefresh()
 
+    def _truncate_with_width(self, text: str, max_width: int) -> str:
+        # Simple character count for now, but considering full-width chars take 2 spaces
+        # To be safe, we use a more conservative limit.
+        current_width = 0
+        result = ""
+        for char in text:
+            char_width = 2 if ord(char) > 0x7F else 1
+            if current_width + char_width > max_width:
+                break
+            result += char
+            current_width += char_width
+        return result
+
     def draw_footer(self, state: AppState):
         self.footer_win.erase()
         self.footer_win.box()
@@ -88,14 +101,17 @@ class Tui:
         elif state.state == State.ERROR:
             status_text = "⚠ エラーが発生しました"
 
-        # ウィンドウ幅に合わせて切り捨て
-        self.footer_win.addstr(1, 2, status_text[:self.width - 4])
+        # ウィンドウ幅（全角考慮）に合わせて切り捨て
+        display_line1 = self._truncate_with_width(status_text, self.width - 6)
+        self.footer_win.addstr(1, 2, display_line1)
 
         # 2行目: 次の動画と操作ガイド
         guide_text = "[n:Next] [s:Stop] [b:Back] [u:Update] [i:History] [a:Add]"
         next_video = state.next_video
         if next_video:
-            next_text = f"Next: {next_video.title[:self.width // 2]}"
+            # Reserve space for guide_text at the right
+            max_next_len = self.width - len(guide_text) - 10
+            next_text = f"Next: {self._truncate_with_width(next_video.title, max_next_len)}"
             self.footer_win.addstr(2, 2, next_text)
             self.footer_win.addstr(2, self.width - len(guide_text) - 2, guide_text)
         else:
