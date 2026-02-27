@@ -14,8 +14,8 @@ class Tui:
 
         # Initialize windows once to avoid memory leaks
         self.header_win = curses.newwin(2, self.width, 0, 0)
-        self.main_win = curses.newwin(self.height - 5, self.width, 2, 0)
-        self.footer_win = curses.newwin(3, self.width, self.height - 3, 0)
+        self.main_win = curses.newwin(self.height - 6, self.width, 2, 0)
+        self.footer_win = curses.newwin(4, self.width, self.height - 4, 0)
         self.register_win = curses.newwin(12, 60, self.height // 2 - 6, self.width // 2 - 30)
         self.error_win = curses.newwin(10, 60, self.height // 2 - 5, self.width // 2 - 30)
         self.help_win = None
@@ -72,6 +72,7 @@ class Tui:
         self.footer_win.erase()
         self.footer_win.box()
 
+        # 1行目: 再生ステータスとタイトル
         status_text = "▶ Ready"
         if state.state == State.LAUNCHING:
             video = state.selected_video
@@ -79,24 +80,26 @@ class Tui:
             status_text = f"▶ 起動中… {title}"
         elif state.state == State.PLAYING:
             title = state.now_playing.title if state.now_playing else "???"
-            max_title_len = self.width // 2 - 25
-            status_text = f"▶ 再生中: {title[:max_title_len]} [n:Next] [s:Stop] [b:UI]"
+            status_text = f"▶ 再生中: {title}"
         elif state.state == State.AFTER_PLAY:
             last_video = state.last_played_video
             title = last_video.title if last_video else "???"
-            max_title_len = self.width // 2 - 15
-            status_text = f"⏹ 再生終了: {title[:max_title_len]} [n:Next]"
+            status_text = f"⏹ 再生終了: {title}"
         elif state.state == State.ERROR:
-            # エラーメッセージはモーダルで表示するため、フッターには表示しない
             status_text = "⚠ エラーが発生しました"
 
+        # ウィンドウ幅に合わせて切り捨て
         self.footer_win.addstr(1, 2, status_text[:self.width - 4])
 
-        # Next info
+        # 2行目: 次の動画と操作ガイド
+        guide_text = "[n:Next] [s:Stop] [b:Back] [u:Update] [i:History] [a:Add]"
         next_video = state.next_video
         if next_video:
-            next_text = f"Next: {next_video.title} (n)"
-            self.footer_win.addstr(1, max(2, self.width // 2), next_text[:self.width // 2 - 2])
+            next_text = f"Next: {next_video.title[:self.width // 2]}"
+            self.footer_win.addstr(2, 2, next_text)
+            self.footer_win.addstr(2, self.width - len(guide_text) - 2, guide_text)
+        else:
+            self.footer_win.addstr(2, 2, guide_text)
 
         self.footer_win.noutrefresh()
 
