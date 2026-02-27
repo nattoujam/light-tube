@@ -105,7 +105,8 @@ class Tui:
 
     def draw_help(self):
         if not self.help_win:
-            self.help_win = curses.newwin(13, 40, self.height // 2 - 6, self.width // 2 - 20)
+            # Increased height to 15 to accommodate all items including border
+            self.help_win = curses.newwin(15, 40, self.height // 2 - 7, self.width // 2 - 20)
         self.help_win.erase()
         self.help_win.box()
         self.help_win.addstr(1, 2, "Keys:")
