@@ -30,7 +30,11 @@ class Tui:
             status = "処理中..."
 
         line = f" {app_name} | {tab_info} | {status}"
-        self.header_win.addstr(0, 0, line.ljust(self.width))
+        try:
+            padded_line = self._pad_with_width(line, self.width - 1)
+            self.header_win.addstr(0, 0, padded_line)
+        except curses.error:
+            pass
         self.header_win.attroff(curses.A_REVERSE)
         self.header_win.noutrefresh()
 
@@ -65,21 +69,30 @@ class Tui:
                 line = f"{prefix} {viewed_mark} {title} {channel_info}"
 
                 # Avoid writing to the last column of the last line to prevent ERR
-                display_line = self._truncate_with_width(line, self.width - 1)
+                # Using self.width - 2 for extra safety
+                display_line = self._truncate_with_width(line, self.width - 2)
 
-                if video_idx == self.selected_idx:
-                    self.main_win.attron(curses.A_REVERSE)
-                    # Use ljust up to width-1 to avoid the problematic last cell
-                    self.main_win.addstr(i, 0, display_line.ljust(self.width - 1))
-                    self.main_win.attroff(curses.A_REVERSE)
-                else:
-                    self.main_win.addstr(i, 0, display_line)
+                try:
+                    if video_idx == self.selected_idx:
+                        self.main_win.attron(curses.A_REVERSE)
+                        # Use custom pad instead of ljust (which is char-count based)
+                        padded_line = self._pad_with_width(display_line, self.width - 2)
+                        self.main_win.addstr(i, 0, padded_line)
+                        self.main_win.attroff(curses.A_REVERSE)
+                    else:
+                        self.main_win.addstr(i, 0, display_line)
+                except curses.error:
+                    pass # Ignore write errors to the very edge
 
         self.main_win.noutrefresh()
 
+    def _get_display_width(self, text: str) -> int:
+        width = 0
+        for char in text:
+            width += 2 if ord(char) > 0x7F else 1
+        return width
+
     def _truncate_with_width(self, text: str, max_width: int) -> str:
-        # Simple character count for now, but considering full-width chars take 2 spaces
-        # To be safe, we use a more conservative limit.
         current_width = 0
         result = ""
         for char in text:
@@ -89,6 +102,12 @@ class Tui:
             result += char
             current_width += char_width
         return result
+
+    def _pad_with_width(self, text: str, target_width: int) -> str:
+        current_width = self._get_display_width(text)
+        if current_width >= target_width:
+            return text
+        return text + (" " * (target_width - current_width))
 
     def draw_footer(self, state: AppState):
         self.footer_win.erase()
