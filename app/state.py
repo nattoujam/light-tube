@@ -1,5 +1,6 @@
 from enum import Enum, auto
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional, List, Any
 import random
 from .models import Video
@@ -21,6 +22,9 @@ class AppState:
     state: State = State.BOOT
     current_tab: str = "New"
     display_videos: List[Video] = field(default_factory=list)
+    selected_idx: int = 0
+    show_help: bool = False
+    busy_until: Optional[datetime] = None
     selected_video: Optional[Video] = None
     next_video: Optional[Video] = None
     now_playing: Optional[Video] = None
@@ -32,6 +36,20 @@ class AppState:
 
     def handle_event(self, event: Event, **kwargs: Any) -> None:
         if event == Event.QUIT:
+            return
+
+        if event == Event.HELP_TOGGLE:
+            self.show_help = not self.show_help
+            return
+
+        if event == Event.CURSOR_UP:
+            if self.selected_idx > 0:
+                self.selected_idx -= 1
+            return
+
+        if event == Event.CURSOR_DOWN:
+            if self.selected_idx < len(self.display_videos) - 1:
+                self.selected_idx += 1
             return
 
         if event == Event.CACHE_LOADED:
@@ -78,8 +96,11 @@ class AppState:
                 self.current_tab = tabs[(idx + 1) % len(tabs)]
             else:
                 self.current_tab = tabs[(idx - 1) % len(tabs)]
+            self.selected_idx = 0
             # Note: The caller (main.py) is responsible for refreshing display_videos
         elif event == Event.RANDOM_REFRESH:
+            if self.current_tab == "Random":
+                self.selected_idx = 0
             # Note: The caller (main.py) is responsible for refreshing display_videos
             pass
 

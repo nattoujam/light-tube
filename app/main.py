@@ -52,7 +52,7 @@ def get_display_videos(storage: VideoStorage, app_state: AppState) -> List[Video
         return []
     return []
 
-def update_background_status(app_state: AppState, player: MpvPlayer, storage: VideoStorage, update_finish_time: Optional[datetime], video_fetcher: VideoFetcher, repository: Repository) -> Optional[datetime]:
+def update_background_status(app_state: AppState, player: MpvPlayer, storage: VideoStorage, video_fetcher: VideoFetcher, repository: Repository) -> None:
     if app_state.state == State.PLAYING:
         exit_code = player.poll_exit_code()
         if exit_code is not None:
@@ -71,31 +71,25 @@ def update_background_status(app_state: AppState, player: MpvPlayer, storage: Vi
     if app_state.state == State.UPDATING:
         # Note: In a real app, this should be in a separate thread.
         # But here we do it synchronously for simplicity in this prototype.
-        # We only do it once when update_finish_time is set to something in the future.
-        if update_finish_time and datetime.now() >= update_finish_time:
-            from .ui import Tui # Avoid circular if any, though it's already imported at top
-            # We want to make sure the "Updating" status is visible
-            # In some cases we might need an explicit render here if we want to be sure
+        if app_state.busy_until and datetime.now() >= app_state.busy_until:
             added_total = 0
             channels = storage.get_channels()
             for channel in channels:
                 try:
                     latest_date = repository.get_latest_video_date(channel.id)
-                    # For "u" (Update Latest), we just fetch the newest 50.
-                    # Duplicate prevention is handled by repository.save_remote_videos.
                     rvs = video_fetcher.fetch_recent(channel.platform, channel.external_id, limit=50)
                     added = repository.save_remote_videos(channel.id, channel.platform, channel.name, rvs)
                     added_total += added
                 except Exception as e:
                     app_state.handle_event(Event.UPDATE_FAILED, error=str(e))
-                    return None
+                    app_state.busy_until = None
+                    return
 
             app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=added_total)
+            app_state.busy_until = None
             refresh_app_state(app_state, storage)
-            return None
-    return update_finish_time
 
-def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: VideoStorage, ui: Tui, show_help: bool, update_finish_time: Optional[datetime], video_fetcher: VideoFetcher, repository: Repository, channel_resolver: ChannelResolver) -> tuple[bool, bool, Optional[datetime]]:
+def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: VideoStorage, ui: Tui, video_fetcher: VideoFetcher, repository: Repository, channel_resolver: ChannelResolver) -> bool:
     running = True
 
     # Process all pending input to prevent "slippery" scrolling
@@ -110,16 +104,15 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
             break
 
     if not keys:
-        return running, show_help, update_finish_time
+        return running
 
     # Find the last key, but ensure 'q' or other critical keys aren't missed
-    # For scrolling, we only care about the net result or the most recent intent
     last_key = keys[-1]
 
     # Check for quit in the whole buffer
     if any(k == ord('q') for k in keys):
         player.stop()
-        return False, show_help, update_finish_time
+        return False
 
     key = last_key
 
@@ -127,24 +120,19 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
         player.stop()
         running = False
     elif key == ord('h'):
-        show_help = not show_help
+        app_state.handle_event(Event.HELP_TOGGLE)
     elif key == ord('j') or key == curses.KEY_DOWN:
-        videos = app_state.get_filtered_videos()
-        if ui.selected_idx < len(videos) - 1:
-            ui.selected_idx += 1
+        app_state.handle_event(Event.CURSOR_DOWN)
     elif key == ord('k') or key == curses.KEY_UP:
-        if ui.selected_idx > 0:
-            ui.selected_idx -= 1
+        app_state.handle_event(Event.CURSOR_UP)
     elif key == ord('\t'):
         app_state.handle_event(Event.TAB_NEXT)
-        ui.selected_idx = 0
         refresh_app_state(app_state, storage)
     elif key == ord('\n') or key == curses.KEY_ENTER:
         videos = app_state.get_filtered_videos()
-        if 0 <= ui.selected_idx < len(videos):
+        if 0 <= app_state.selected_idx < len(videos):
             mark_video_as_viewed(storage, app_state.now_playing)
-
-            video = videos[ui.selected_idx]
+            video = videos[app_state.selected_idx]
             app_state.handle_event(Event.PLAY_SELECTED, video=video)
             refresh_app_state(app_state, storage)
     elif key == ord('n'):
@@ -154,7 +142,6 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
         refresh_app_state(app_state, storage)
     elif key == ord('s'):
         mark_video_as_viewed(storage, app_state.now_playing)
-
         player.stop()
         app_state.handle_event(Event.STOP)
         refresh_app_state(app_state, storage)
@@ -164,12 +151,12 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
     elif key == ord('u'):
         if app_state.state != State.UPDATING:
             app_state.handle_event(Event.UPDATE)
-            update_finish_time = datetime.now() + timedelta(milliseconds=100)
+            app_state.busy_until = datetime.now() + timedelta(milliseconds=100)
     elif key == ord('i'):
         # Update history for the current selected channel
         videos = app_state.get_filtered_videos()
-        if 0 <= ui.selected_idx < len(videos):
-            video = videos[ui.selected_idx]
+        if 0 <= app_state.selected_idx < len(videos):
+            video = videos[app_state.selected_idx]
             if video.channel_id:
                 channel = storage.get_channel_by_id(video.channel_id)
                 if channel:
@@ -177,8 +164,6 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
                     ui.render(app_state)
                     try:
                         oldest_date = repository.get_oldest_video_date(video.channel_id)
-                        # Fetch videos published before the oldest one we have
-                        # Use channel.external_id instead of video.video_id
                         rvs = video_fetcher.fetch_history(channel.platform, channel.external_id, published_before=oldest_date, limit=50)
                         added = repository.save_remote_videos(channel.id, channel.platform, channel.name, rvs)
                         app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=added)
@@ -198,10 +183,9 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
             platform_key = ui.get_input_string("  入力: ", ui.height // 2 - 2, ui.width // 2 - 20)
             if not platform_key: # Canceled or Empty
                  app_state.handle_event(Event.BACK_TO_UI)
-                 return running, show_help, update_finish_time
+                 return running
 
             platform_name = "youtube"
-            # Redraw to show what was selected or just clear the line if needed
             ui.render(app_state)
 
             channel_name = ui.get_input_string("  入力: ", ui.height // 2 + 1, ui.width // 2 - 20)
@@ -225,11 +209,9 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
             app_state.handle_event(Event.REGISTRATION_FAILED, error=str(e))
     elif key == ord('r'):
         app_state.handle_event(Event.RANDOM_REFRESH)
-        if app_state.current_tab == "Random":
-            ui.selected_idx = 0
-            refresh_app_state(app_state, storage)
+        refresh_app_state(app_state, storage)
 
-    return running, show_help, update_finish_time
+    return running
 
 def handle_state_actions(app_state: AppState, player: MpvPlayer, storage: VideoStorage) -> None:
     if app_state.state == State.LAUNCHING:
@@ -267,14 +249,12 @@ def main(stdscr: Any) -> None:
     ui = Tui(stdscr)
     stdscr.nodelay(True)
 
-    show_help = False
     running = True
-    update_finish_time = None
 
     while running:
-        update_finish_time = update_background_status(app_state, player, storage, update_finish_time, video_fetcher, repository)
-        ui.render(app_state, show_help)
-        running, show_help, update_finish_time = handle_input(stdscr, app_state, player, storage, ui, show_help, update_finish_time, video_fetcher, repository, channel_resolver)
+        update_background_status(app_state, player, storage, video_fetcher, repository)
+        ui.render(app_state)
+        running = handle_input(stdscr, app_state, player, storage, ui, video_fetcher, repository, channel_resolver)
         handle_state_actions(app_state, player, storage)
         time.sleep(0.05)
 

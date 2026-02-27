@@ -9,7 +9,6 @@ class Tui:
         self.stdscr = stdscr
         curses.curs_set(0)
         self.height, self.width = stdscr.getmaxyx()
-        self.selected_idx = 0
         self.scroll_offset = 0
 
         # Initialize windows once to avoid memory leaks
@@ -30,61 +29,9 @@ class Tui:
             status = "処理中..."
 
         line = f" {app_name} | {tab_info} | {status}"
-        try:
-            padded_line = self._pad_with_width(line, self.width - 1)
-            self.header_win.addstr(0, 0, padded_line)
-        except curses.error:
-            pass
+        self.header_win.addstr(0, 0, line.ljust(self.width))
         self.header_win.attroff(curses.A_REVERSE)
         self.header_win.noutrefresh()
-
-    def draw_main_area(self, state: AppState):
-        self.main_win.erase()
-        main_height, _ = self.main_win.getmaxyx()
-
-        videos = state.get_filtered_videos()
-        if not videos:
-            self.main_win.addstr(1, 2, "No videos found.")
-        else:
-            # Adjust scroll offset if necessary
-            if self.selected_idx < self.scroll_offset:
-                self.scroll_offset = self.selected_idx
-            elif self.selected_idx >= self.scroll_offset + main_height:
-                self.scroll_offset = self.selected_idx - main_height + 1
-
-            for i in range(main_height):
-                video_idx = i + self.scroll_offset
-                if video_idx >= len(videos):
-                    break
-
-                video = videos[video_idx]
-                prefix = ">" if video_idx == self.selected_idx else " "
-                viewed_mark = "[v]" if video.viewed else "[ ]"
-
-                # Calculate max title length to avoid overflow
-                # Space for prefix(2), viewed_mark(4), space(1), channel(varies), parens(2)
-                channel_info = f"({video.channel})"
-                available_width = self.width - 10 - len(channel_info)
-                title = self._truncate_with_width(video.title, available_width)
-                line = f"{prefix} {viewed_mark} {title} {channel_info}"
-
-                # Avoid writing to the last column of the last line to prevent ERR
-                # Using self.width - 2 for extra safety
-                display_line = self._truncate_with_width(line, self.width - 2)
-
-                try:
-                    if video_idx == self.selected_idx:
-                        self.main_win.attron(curses.A_REVERSE)
-                        # Use custom pad instead of ljust (which is char-count based)
-                        padded_line = self._pad_with_width(display_line, self.width - 2)
-                        self.main_win.addstr(i, 0, padded_line)
-                        self.main_win.attroff(curses.A_REVERSE)
-                    else:
-                        self.main_win.addstr(i, 0, display_line)
-                except curses.error:
-                    pass # Ignore write errors to the very edge
-
-        self.main_win.noutrefresh()
 
     def _get_display_width(self, text: str) -> int:
         width = 0
@@ -108,6 +55,54 @@ class Tui:
         if current_width >= target_width:
             return text
         return text + (" " * (target_width - current_width))
+
+    def draw_main_area(self, state: AppState):
+        self.main_win.erase()
+        main_height, _ = self.main_win.getmaxyx()
+
+        videos = state.get_filtered_videos()
+        if not videos:
+            self.main_win.addstr(1, 2, "No videos found.")
+        else:
+            # Adjust scroll offset if necessary
+            if state.selected_idx < self.scroll_offset:
+                self.scroll_offset = state.selected_idx
+            elif state.selected_idx >= self.scroll_offset + main_height:
+                self.scroll_offset = state.selected_idx - main_height + 1
+
+            for i in range(main_height):
+                video_idx = i + self.scroll_offset
+                if video_idx >= len(videos):
+                    break
+
+                video = videos[video_idx]
+                prefix = ">" if video_idx == state.selected_idx else " "
+                viewed_mark = "[v]" if video.viewed else "[ ]"
+
+                # Calculate max title length to avoid overflow
+                # Space for prefix(2), viewed_mark(4), space(1), channel(varies), parens(2)
+                channel_info = f"({video.channel})"
+                available_width = self.width - 10 - len(channel_info)
+                title = self._truncate_with_width(video.title, available_width)
+                line = f"{prefix} {viewed_mark} {title} {channel_info}"
+
+                # Avoid writing to the last column of the last line to prevent ERR
+                # Using self.width - 2 for extra safety
+                display_line = self._truncate_with_width(line, self.width - 2)
+
+                try:
+                    if video_idx == state.selected_idx:
+                        self.main_win.attron(curses.A_REVERSE)
+                        # Use custom pad instead of ljust (which is char-count based)
+                        padded_line = self._pad_with_width(display_line, self.width - 2)
+                        self.main_win.addstr(i, 0, padded_line)
+                        self.main_win.attroff(curses.A_REVERSE)
+                    else:
+                        self.main_win.addstr(i, 0, display_line)
+                except curses.error:
+                    pass # Ignore write errors to the very edge
+
+        self.main_win.noutrefresh()
 
     def draw_footer(self, state: AppState):
         self.footer_win.erase()
@@ -168,7 +163,7 @@ class Tui:
         self.help_win.addstr(13, 2, "q: Quit")
         self.help_win.noutrefresh()
 
-    def render(self, state: AppState, show_help: bool = False):
+    def render(self, state: AppState):
         self.draw_header(state)
         self.draw_main_area(state)
         self.draw_footer(state)
@@ -176,7 +171,7 @@ class Tui:
             self.draw_register(state)
         elif state.state == State.ERROR:
             self.draw_error(state)
-        if show_help:
+        if state.show_help:
             self.draw_help()
         curses.doupdate()
 

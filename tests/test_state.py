@@ -47,3 +47,30 @@ def test_updating_flow():
     state.handle_event(Event.UPDATE_SUCCEEDED, added_count=5)
     assert state.state == State.BROWSE
     assert "+5件" in state.update_status
+
+def test_ui_state_events(sample_video):
+    state = AppState(state=State.BROWSE, display_videos=[sample_video, sample_video])
+
+    # Help toggle
+    assert not state.show_help
+    state.handle_event(Event.HELP_TOGGLE)
+    assert state.show_help
+    state.handle_event(Event.HELP_TOGGLE)
+    assert not state.show_help
+
+    # Cursor movement
+    assert state.selected_idx == 0
+    state.handle_event(Event.CURSOR_DOWN)
+    assert state.selected_idx == 1
+    state.handle_event(Event.CURSOR_DOWN) # Boundary check
+    assert state.selected_idx == 1
+    state.handle_event(Event.CURSOR_UP)
+    assert state.selected_idx == 0
+    state.handle_event(Event.CURSOR_UP) # Boundary check
+    assert state.selected_idx == 0
+
+def test_tab_reset_index(sample_video):
+    state = AppState(state=State.BROWSE, current_tab="New", display_videos=[sample_video, sample_video], selected_idx=1)
+    state.handle_event(Event.TAB_NEXT)
+    assert state.current_tab == "Random"
+    assert state.selected_idx == 0
