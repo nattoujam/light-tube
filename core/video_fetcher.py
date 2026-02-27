@@ -3,7 +3,6 @@ from datetime import datetime
 import yaml
 from .platform.base import PlatformBase
 from .platform.youtube import YouTube
-from .platform.niconico import Niconico
 
 class PlatformFactory:
     def __init__(self, config_path: str):
@@ -14,9 +13,6 @@ class PlatformFactory:
         if platform_name == "youtube":
             api_key = self.config["youtube"]["api_key"]
             return YouTube(api_key)
-        elif platform_name == "niconico":
-            base_url = self.config["niconico"]["base_url"]
-            return Niconico(base_url)
         else:
             raise ValueError(f"Unknown platform: {platform_name}")
 

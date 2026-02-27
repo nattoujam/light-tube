@@ -182,7 +182,7 @@ def handle_input(stdscr: Any, app_state: AppState, player: MpvPlayer, storage: V
                  app_state.handle_event(Event.BACK_TO_UI)
                  return running, show_help, update_finish_time
 
-            platform_name = "youtube" if platform_key == "y" else "niconico"
+            platform_name = "youtube"
             # Redraw to show what was selected or just clear the line if needed
             ui.render(app_state)
 

@@ -79,11 +79,13 @@ class Tui:
             status_text = f"▶ 起動中… {title}"
         elif state.state == State.PLAYING:
             title = state.now_playing.title if state.now_playing else "???"
-            status_text = f"▶ 再生中: {title} [n:Next] [s:Stop] [b:UI]"
+            max_title_len = self.width // 2 - 25
+            status_text = f"▶ 再生中: {title[:max_title_len]} [n:Next] [s:Stop] [b:UI]"
         elif state.state == State.AFTER_PLAY:
             last_video = state.last_played_video
             title = last_video.title if last_video else "???"
-            status_text = f"⏹ 再生終了: {title} [n:Next]"
+            max_title_len = self.width // 2 - 15
+            status_text = f"⏹ 再生終了: {title[:max_title_len]} [n:Next]"
         elif state.state == State.ERROR:
             # エラーメッセージはモーダルで表示するため、フッターには表示しない
             status_text = "⚠ エラーが発生しました"
@@ -134,9 +136,9 @@ class Tui:
         self.register_win.erase()
         self.register_win.box()
         self.register_win.addstr(1, 2, "チャンネル登録", curses.A_BOLD)
-        self.register_win.addstr(3, 2, "1. プラットフォームを選択 (y: YouTube / n: ニコニコ)")
+        self.register_win.addstr(3, 2, "1. プラットフォームを選択 (y: YouTube)")
         # Input for platform will be on line 4
-        self.register_win.addstr(6, 2, "2. チャンネル名(YT) / タグ名(ニコニコ) を入力")
+        self.register_win.addstr(6, 2, "2. チャンネル名(YT) を入力")
         # Input for name will be on line 7
         self.register_win.addstr(9, 2, "bキーでキャンセル")
 
