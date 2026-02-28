@@ -13,8 +13,10 @@ class Tui:
 
         # Initialize windows once to avoid memory leaks
         self.header_win = curses.newwin(2, self.width, 0, 0)
-        self.main_win = curses.newwin(self.height - 5, self.width, 2, 0)
-        self.footer_win = curses.newwin(3, self.width, self.height - 3, 0)
+        self.main_win = curses.newwin(self.height - 6, self.width, 2, 0)
+        self.footer_win = curses.newwin(4, self.width, self.height - 4, 0)
+        self.register_win = curses.newwin(12, 60, self.height // 2 - 6, self.width // 2 - 30)
+        self.error_win = curses.newwin(10, 60, self.height // 2 - 5, self.width // 2 - 30)
         self.help_win = None
 
     def draw_header(self, state: AppState):
@@ -23,13 +25,36 @@ class Tui:
         app_name = "Lightweight Video Player"
         tab_info = f"Tab: [{state.current_tab}]"
         status = state.update_status if state.update_status else ""
-        if state.state == State.UPDATING:
-            status = "更新中..."
+        if state.state == State.UPDATING or state.state == State.LOADING:
+            status = "処理中..."
 
         line = f" {app_name} | {tab_info} | {status}"
         self.header_win.addstr(0, 0, line.ljust(self.width))
         self.header_win.attroff(curses.A_REVERSE)
         self.header_win.noutrefresh()
+
+    def _get_display_width(self, text: str) -> int:
+        width = 0
+        for char in text:
+            width += 2 if ord(char) > 0x7F else 1
+        return width
+
+    def _truncate_with_width(self, text: str, max_width: int) -> str:
+        current_width = 0
+        result = ""
+        for char in text:
+            char_width = 2 if ord(char) > 0x7F else 1
+            if current_width + char_width > max_width:
+                break
+            result += char
+            current_width += char_width
+        return result
+
+    def _pad_with_width(self, text: str, target_width: int) -> str:
+        current_width = self._get_display_width(text)
+        if current_width >= target_width:
+            return text
+        return text + (" " * (target_width - current_width))
 
     def draw_main_area(self, state: AppState):
         self.main_win.erase()
@@ -53,15 +78,29 @@ class Tui:
                 video = videos[video_idx]
                 prefix = ">" if video_idx == state.selected_idx else " "
                 viewed_mark = "[v]" if video.viewed else "[ ]"
-                title = video.title[:self.width - 25]
-                line = f"{prefix} {viewed_mark} {title} ({video.channel})"
 
-                if video_idx == state.selected_idx:
-                    self.main_win.attron(curses.A_REVERSE)
-                    self.main_win.addstr(i, 0, line.ljust(self.width))
-                    self.main_win.attroff(curses.A_REVERSE)
-                else:
-                    self.main_win.addstr(i, 0, line)
+                # Calculate max title length to avoid overflow
+                # Space for prefix(2), viewed_mark(4), space(1), channel(varies), parens(2)
+                channel_info = f"({video.channel})"
+                available_width = self.width - 10 - len(channel_info)
+                title = self._truncate_with_width(video.title, available_width)
+                line = f"{prefix} {viewed_mark} {title} {channel_info}"
+
+                # Avoid writing to the last column of the last line to prevent ERR
+                # Using self.width - 2 for extra safety
+                display_line = self._truncate_with_width(line, self.width - 2)
+
+                try:
+                    if video_idx == state.selected_idx:
+                        self.main_win.attron(curses.A_REVERSE)
+                        # Use custom pad instead of ljust (which is char-count based)
+                        padded_line = self._pad_with_width(display_line, self.width - 2)
+                        self.main_win.addstr(i, 0, padded_line)
+                        self.main_win.attroff(curses.A_REVERSE)
+                    else:
+                        self.main_win.addstr(i, 0, display_line)
+                except curses.error:
+                    pass # Ignore write errors to the very edge
 
         self.main_win.noutrefresh()
 
@@ -69,6 +108,7 @@ class Tui:
         self.footer_win.erase()
         self.footer_win.box()
 
+        # 1行目: 再生ステータスとタイトル
         status_text = "▶ Ready"
         if state.state == State.LAUNCHING:
             video = state.selected_video
@@ -76,27 +116,36 @@ class Tui:
             status_text = f"▶ 起動中… {title}"
         elif state.state == State.PLAYING:
             title = state.now_playing.title if state.now_playing else "???"
-            status_text = f"▶ 再生中: {title} [n:Next] [s:Stop] [b:UI]"
+            status_text = f"▶ 再生中: {title}"
         elif state.state == State.AFTER_PLAY:
             last_video = state.last_played_video
             title = last_video.title if last_video else "???"
-            status_text = f"⏹ 再生終了: {title} [n:Next]"
+            status_text = f"⏹ 再生終了: {title}"
         elif state.state == State.ERROR:
-            status_text = f"⚠ Error: {state.error_message}"
+            status_text = "⚠ エラーが発生しました"
 
-        self.footer_win.addstr(1, 2, status_text[:self.width - 4])
+        # ウィンドウ幅（全角考慮）に合わせて切り捨て
+        display_line1 = self._truncate_with_width(status_text, self.width - 6)
+        self.footer_win.addstr(1, 2, display_line1)
 
-        # Next info
+        # 2行目: 次の動画と操作ガイド
+        guide_text = "[n:Next] [s:Stop] [b:Back] [u:Update] [i:History] [a:Add]"
         next_video = state.next_video
         if next_video:
-            next_text = f"Next: {next_video.title} (n)"
-            self.footer_win.addstr(1, max(2, self.width // 2), next_text[:self.width // 2 - 2])
+            # Reserve space for guide_text at the right
+            max_next_len = self.width - len(guide_text) - 10
+            next_text = f"Next: {self._truncate_with_width(next_video.title, max_next_len)}"
+            self.footer_win.addstr(2, 2, next_text)
+            self.footer_win.addstr(2, self.width - len(guide_text) - 2, guide_text)
+        else:
+            self.footer_win.addstr(2, 2, guide_text)
 
         self.footer_win.noutrefresh()
 
     def draw_help(self):
         if not self.help_win:
-            self.help_win = curses.newwin(13, 40, self.height // 2 - 6, self.width // 2 - 20)
+            # Increased height to 15 to accommodate all items including border
+            self.help_win = curses.newwin(15, 40, self.height // 2 - 7, self.width // 2 - 20)
         self.help_win.erase()
         self.help_win.box()
         self.help_win.addstr(1, 2, "Keys:")
@@ -105,17 +154,74 @@ class Tui:
         self.help_win.addstr(4, 2, "Tab: Switch Tab")
         self.help_win.addstr(5, 2, "n: Next")
         self.help_win.addstr(6, 2, "s: Stop")
-        self.help_win.addstr(7, 2, "u: Update")
-        self.help_win.addstr(8, 2, "r: Random Refresh")
-        self.help_win.addstr(9, 2, "b: Back to UI")
-        self.help_win.addstr(10, 2, "h: Toggle Help")
-        self.help_win.addstr(11, 2, "q: Quit")
+        self.help_win.addstr(7, 2, "u: Update Latest")
+        self.help_win.addstr(8, 2, "i: Update History")
+        self.help_win.addstr(9, 2, "a: Add Channel")
+        self.help_win.addstr(10, 2, "r: Random Refresh")
+        self.help_win.addstr(11, 2, "b: Back to UI")
+        self.help_win.addstr(12, 2, "h: Toggle Help")
+        self.help_win.addstr(13, 2, "q: Quit")
         self.help_win.noutrefresh()
 
     def render(self, state: AppState):
         self.draw_header(state)
         self.draw_main_area(state)
         self.draw_footer(state)
+        if state.state == State.REGISTER:
+            self.draw_register(state)
+        elif state.state == State.ERROR:
+            self.draw_error(state)
         if state.show_help:
             self.draw_help()
         curses.doupdate()
+
+    def draw_register(self, state: AppState):
+        self.register_win.erase()
+        self.register_win.box()
+        self.register_win.addstr(1, 2, "チャンネル登録", curses.A_BOLD)
+        self.register_win.addstr(3, 2, "1. プラットフォームを選択 (y: YouTube)")
+        # Input for platform will be on line 4
+        self.register_win.addstr(6, 2, "2. チャンネル名(YT) を入力")
+        # Input for name will be on line 7
+        self.register_win.addstr(9, 2, "bキーでキャンセル")
+
+        # エラーメッセージがあれば表示
+        if state.error_message:
+            self.register_win.attron(curses.color_pair(1) if curses.has_colors() else curses.A_BOLD)
+            self.register_win.addstr(10, 2, f"エラー: {state.error_message[:54]}")
+            if curses.has_colors():
+                self.register_win.attroff(curses.color_pair(1))
+
+        self.register_win.noutrefresh()
+
+    def draw_error(self, state: AppState):
+        self.error_win.erase()
+        self.error_win.box()
+        self.error_win.attron(curses.A_BOLD)
+        self.error_win.addstr(1, 2, "エラーが発生しました")
+        self.error_win.attroff(curses.A_BOLD)
+
+        msg = state.error_message or "不明なエラー"
+        # メッセージを折り返して表示
+        for i, line in enumerate([msg[i:i+54] for i in range(0, len(msg), 54)]):
+            if i > 5: break
+            self.error_win.addstr(3 + i, 2, line)
+
+        self.error_win.addstr(8, 2, "bキーで戻る")
+        self.error_win.noutrefresh()
+
+    def get_input_string(self, prompt: str, y: int, x: int) -> str:
+        curses.echo()
+        curses.curs_set(1)
+        self.stdscr.nodelay(False)
+        self.stdscr.addstr(y, x, prompt)
+        self.stdscr.refresh()
+        try:
+            input_bytes = self.stdscr.getstr(y, x + len(prompt), 50)
+            input_str = input_bytes.decode('utf-8')
+        except:
+            input_str = ""
+        self.stdscr.nodelay(True)
+        curses.curs_set(0)
+        curses.noecho()
+        return input_str

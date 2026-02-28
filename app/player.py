@@ -30,7 +30,7 @@ class MpvPlayer:
 
         try:
             self.process = subprocess.Popen(
-                ['mpv', video.url, '--title=' + video.title, '--input-conf=' + input_conf_path],
+                ['mpv', video.url, '--title=' + video.title, '--input-conf=' + input_conf_path, '--ytdl=yes'],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )

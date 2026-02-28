@@ -13,10 +13,14 @@ class Event(Enum):
     CURSOR_UP = auto()
     CURSOR_DOWN = auto()
     HELP_TOGGLE = auto()
+    REGISTER = auto()
+    HISTORY_UPDATE = auto()
     QUIT = auto()
 
     # Internal Events
     CACHE_LOADED = auto()
+    REGISTRATION_SUCCEEDED = auto()
+    REGISTRATION_FAILED = auto()
     UPDATE_STARTED = auto()
     UPDATE_SUCCEEDED = auto()
     UPDATE_FAILED = auto()
