@@ -1,7 +1,6 @@
 import pytest
 from datetime import datetime, timedelta
 from app.models import Video
-from app.next_logic import select_next_video, get_related_videos
 from app.storage import VideoStorage
 import os
 
@@ -26,7 +25,7 @@ def storage():
 
 def test_related_logic(storage):
     # target ChA, 2023-01-01
-    related = get_related_videos(storage, target_video_id="1")
+    related = storage.get_related_videos(target_id="1")
 
     # Same channel is ChA: V2, V4
     assert len(related) == 2
@@ -36,19 +35,19 @@ def test_related_logic(storage):
 
 def test_select_next_priority_related(storage):
     # If playing V1, next should be related unviewed (V2)
-    next_v = select_next_video(storage, current_video_id="1")
+    next_v = storage.select_next_video(current_id="1")
     assert next_v.id == "2"
 
 def test_select_next_priority_new_unviewed(storage):
     # If playing V3 (ChB), no related unviewed in ChB.
     # Should pick Newest unviewed (V2 is 01-02, V1 is 01-01).
-    next_v = select_next_video(storage, current_video_id="3")
+    next_v = storage.select_next_video(current_id="3")
     assert next_v.id == "2"
 
 def test_exclude_current_and_last(storage):
     # Current V1, Last V2. Candidates V3, V4.
     # V3 is unviewed.
-    next_v = select_next_video(storage, current_video_id="1", last_video_id="2")
+    next_v = storage.select_next_video(current_id="1", last_id="2")
     assert next_v.id == "3"
 
 def test_random_fallback(storage):
@@ -61,6 +60,6 @@ def test_random_fallback(storage):
         v.viewed = True
         storage.update_video(v)
 
-    next_v = select_next_video(storage)
+    next_v = storage.select_next_video()
     assert next_v is not None
     assert next_v.id in ["1", "2", "3", "4"]
