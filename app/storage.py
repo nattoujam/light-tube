@@ -3,7 +3,7 @@ import os
 import contextlib
 from datetime import datetime
 from typing import List, Optional, Iterator
-from .models import Video
+from .models import Video, Channel
 
 class VideoStorage:
     def __init__(self, db_path: str):
@@ -12,6 +12,17 @@ class VideoStorage:
 
     def _init_db(self) -> None:
         with self._connection() as conn:
+            # Table: channels
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS channels (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    platform TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    external_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            # Table: videos
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS videos (
                     id TEXT PRIMARY KEY,
@@ -20,9 +31,17 @@ class VideoStorage:
                     upload_date TEXT NOT NULL,
                     url TEXT NOT NULL,
                     viewed INTEGER DEFAULT 0,
-                    started_at TEXT
+                    started_at TEXT,
+                    channel_id INTEGER,
+                    platform TEXT,
+                    video_id TEXT,
+                    created_at TEXT,
+                    FOREIGN KEY(channel_id) REFERENCES channels(id)
                 )
             """)
+
+            # Ensure UNIQUE constraint on url (watch_url)
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_url ON videos(url)")
 
     @contextlib.contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
@@ -42,7 +61,20 @@ class VideoStorage:
             upload_date=datetime.fromisoformat(row['upload_date']),
             url=row['url'],
             viewed=bool(row['viewed']),
-            started_at=datetime.fromisoformat(row['started_at']) if row['started_at'] else None
+            started_at=datetime.fromisoformat(row['started_at']) if row['started_at'] else None,
+            platform=row['platform'] if 'platform' in row.keys() else None,
+            channel_id=row['channel_id'] if 'channel_id' in row.keys() else None,
+            video_id=row['video_id'] if 'video_id' in row.keys() else None,
+            created_at=datetime.fromisoformat(row['created_at']) if 'created_at' in row.keys() and row['created_at'] else None
+        )
+
+    def _row_to_channel(self, row: sqlite3.Row) -> Channel:
+        return Channel(
+            id=row['id'],
+            platform=row['platform'],
+            name=row['name'],
+            external_id=row['external_id'],
+            created_at=datetime.fromisoformat(row['created_at'])
         )
 
     @property
@@ -54,11 +86,11 @@ class VideoStorage:
         # Compatibility: no-op since we use auto-commit in context manager
         pass
 
-    def add_video(self, video: Video) -> None:
+    def add_video(self, video: Video) -> int:
         with self._connection() as conn:
-            conn.execute("""
-                INSERT OR IGNORE INTO videos (id, title, channel, upload_date, url, viewed, started_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+            cursor = conn.execute("""
+                INSERT OR IGNORE INTO videos (id, title, channel, upload_date, url, viewed, started_at, channel_id, platform, video_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 video.id,
                 video.title,
@@ -66,8 +98,13 @@ class VideoStorage:
                 video.upload_date.isoformat(),
                 video.url,
                 1 if video.viewed else 0,
-                video.started_at.isoformat() if video.started_at else None
+                video.started_at.isoformat() if video.started_at else None,
+                video.channel_id,
+                video.platform,
+                video.video_id,
+                video.created_at.isoformat() if video.created_at else None
             ))
+            return cursor.rowcount
 
     def get_video_by_id(self, video_id: str) -> Optional[Video]:
         with self._connection() as conn:
@@ -79,7 +116,7 @@ class VideoStorage:
         with self._connection() as conn:
             conn.execute("""
                 UPDATE videos
-                SET title = ?, channel = ?, upload_date = ?, url = ?, viewed = ?, started_at = ?
+                SET title = ?, channel = ?, upload_date = ?, url = ?, viewed = ?, started_at = ?, channel_id = ?, platform = ?, video_id = ?, created_at = ?
                 WHERE id = ?
             """, (
                 video.title,
@@ -88,8 +125,37 @@ class VideoStorage:
                 video.url,
                 1 if video.viewed else 0,
                 video.started_at.isoformat() if video.started_at else None,
+                video.channel_id,
+                video.platform,
+                video.video_id,
+                video.created_at.isoformat() if video.created_at else None,
                 video.id
             ))
+
+    def save_channel(self, platform: str, name: str, external_id: str) -> int:
+        with self._connection() as conn:
+            cursor = conn.execute("""
+                INSERT INTO channels (platform, name, external_id, created_at)
+                VALUES (?, ?, ?, ?)
+            """, (platform, name, external_id, datetime.now().isoformat()))
+            return cursor.lastrowid
+
+    def get_channels(self) -> List[Channel]:
+        with self._connection() as conn:
+            cursor = conn.execute("SELECT * FROM channels")
+            return [self._row_to_channel(row) for row in cursor.fetchall()]
+
+    def get_channel_by_external_id(self, platform: str, external_id: str) -> Optional[Channel]:
+        with self._connection() as conn:
+            cursor = conn.execute("SELECT * FROM channels WHERE platform = ? AND external_id = ?", (platform, external_id))
+            row = cursor.fetchone()
+            return self._row_to_channel(row) if row else None
+
+    def get_channel_by_id(self, channel_id: int) -> Optional[Channel]:
+        with self._connection() as conn:
+            cursor = conn.execute("SELECT * FROM channels WHERE id = ?", (channel_id,))
+            row = cursor.fetchone()
+            return self._row_to_channel(row) if row else None
 
     def get_new_videos(self, limit: int = 100) -> List[Video]:
         with self._connection() as conn:

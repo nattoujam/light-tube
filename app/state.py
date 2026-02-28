@@ -13,6 +13,8 @@ class State(Enum):
     PLAYING = auto()
     AFTER_PLAY = auto()
     UPDATING = auto()
+    REGISTER = auto()
+    LOADING = auto()
     ERROR = auto()
 
 @dataclass
@@ -68,6 +70,10 @@ class AppState:
             self._handle_after_play(event, **kwargs)
         elif self.state == State.UPDATING:
             self._handle_updating(event, **kwargs)
+        elif self.state == State.REGISTER:
+            self._handle_register(event, **kwargs)
+        elif self.state == State.LOADING:
+            self._handle_loading(event, **kwargs)
         elif self.state == State.ERROR:
             self._handle_error(event, **kwargs)
 
@@ -77,9 +83,12 @@ class AppState:
             if video:
                 self.selected_video = video
                 self.state = State.LAUNCHING
-        elif event == Event.UPDATE:
+        elif event == Event.UPDATE or event == Event.HISTORY_UPDATE:
             self.previous_state = self.state
             self.state = State.UPDATING
+        elif event == Event.REGISTER:
+            self.previous_state = self.state
+            self.state = State.REGISTER
         elif event == Event.TAB_NEXT or event == Event.TAB_PREV:
             tabs = ["New", "Random", "Related"]
             idx = tabs.index(self.current_tab)
@@ -134,6 +143,20 @@ class AppState:
             self.update_status = f"更新完了 +{kwargs.get('added_count', 0)}件"
             self.state = self.previous_state or State.BROWSE
         elif event == Event.UPDATE_FAILED:
+            self.error_message = str(kwargs.get('error'))
+            self.state = State.ERROR
+
+    def _handle_register(self, event: Event, **kwargs: Any) -> None:
+        if event == Event.UPDATE_STARTED:
+            self.state = State.LOADING
+        elif event == Event.BACK_TO_UI:
+            self.state = State.BROWSE
+
+    def _handle_loading(self, event: Event, **kwargs: Any) -> None:
+        if event == Event.REGISTRATION_SUCCEEDED:
+            self.update_status = "登録完了"
+            self.state = State.BROWSE
+        elif event == Event.REGISTRATION_FAILED:
             self.error_message = str(kwargs.get('error'))
             self.state = State.ERROR
 
