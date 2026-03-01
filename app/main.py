@@ -63,38 +63,46 @@ class VideoPlayerApp:
                                                 current_id=current_id,
                                                 last_id=self.app_state.last_played_video.id if self.app_state.last_played_video else None)
 
+    def _process_mpv_events(self) -> None:
+        if self.app_state.state != State.PLAYING:
+            return
+
+        exit_code = self.player.poll_exit_code()
+        if exit_code is not None:
+            self.mark_video_as_viewed(self.app_state.now_playing)
+
+            if exit_code == MPV_EXIT_CODE_NEXT:
+                self.app_state.handle_event(Event.MPV_EXITED)
+                if self.app_state.next_video:
+                    self.app_state.handle_event(Event.NEXT, video=self.app_state.next_video)
+            else:
+                self.app_state.handle_event(Event.MPV_EXITED)
+
+            self.refresh_app_state()
+
+    def _process_background_updates(self) -> None:
+        if self.app_state.state != State.UPDATING:
+            return
+
+        if self.app_state.busy_until and datetime.now() >= self.app_state.busy_until:
+            added_total = 0
+            channels = self.storage.get_channels()
+            for channel in channels:
+                try:
+                    added = self._sync_channel_videos(channel, fetch_type="recent", limit=50)
+                    added_total += added
+                except Exception as e:
+                    self.app_state.handle_event(Event.UPDATE_FAILED, error=str(e))
+                    self.app_state.busy_until = None
+                    return
+
+            self.app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=added_total)
+            self.app_state.busy_until = None
+            self.refresh_app_state()
+
     def update_background_status(self) -> None:
-        if self.app_state.state == State.PLAYING:
-            exit_code = self.player.poll_exit_code()
-            if exit_code is not None:
-                self.mark_video_as_viewed(self.app_state.now_playing)
-
-                if exit_code == MPV_EXIT_CODE_NEXT:
-                    self.app_state.handle_event(Event.MPV_EXITED)
-                    if self.app_state.next_video:
-                        self.app_state.handle_event(Event.NEXT, video=self.app_state.next_video)
-                else:
-                    self.app_state.handle_event(Event.MPV_EXITED)
-
-                self.refresh_app_state()
-
-        if self.app_state.state == State.UPDATING:
-            if self.app_state.busy_until and datetime.now() >= self.app_state.busy_until:
-                added_total = 0
-                channels = self.storage.get_channels()
-                for channel in channels:
-                    try:
-                        rvs = self.video_fetcher.fetch_recent(channel.platform, channel.external_id, limit=50)
-                        added = self.repository.save_remote_videos(channel.id, channel.platform, channel.name, rvs)
-                        added_total += added
-                    except Exception as e:
-                        self.app_state.handle_event(Event.UPDATE_FAILED, error=str(e))
-                        self.app_state.busy_until = None
-                        return
-
-                self.app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=added_total)
-                self.app_state.busy_until = None
-                self.refresh_app_state()
+        self._process_mpv_events()
+        self._process_background_updates()
 
     def handle_state_actions(self) -> None:
         if self.app_state.state == State.LAUNCHING:
@@ -113,6 +121,79 @@ class VideoPlayerApp:
         self.mark_video_as_viewed(self.app_state.now_playing)
         self.app_state.handle_event(event, **kwargs)
         self.refresh_app_state()
+
+    def _get_selected_video(self) -> Optional[Video]:
+        videos = self.app_state.get_filtered_videos()
+        if 0 <= self.app_state.selected_idx < len(videos):
+            return videos[self.app_state.selected_idx]
+        return None
+
+    def _sync_channel_videos(self, channel: Any, fetch_type: str = "recent", **kwargs: Any) -> int:
+        """
+        Fetch and save videos for a channel.
+        fetch_type can be "recent" or "history".
+        """
+        if fetch_type == "recent":
+            rvs = self.video_fetcher.fetch_recent(channel.platform, channel.external_id, limit=kwargs.get('limit', 50))
+        elif fetch_type == "history":
+            rvs = self.video_fetcher.fetch_history(channel.platform, channel.external_id,
+                                                   published_before=kwargs.get('published_before'),
+                                                   limit=kwargs.get('limit', 50))
+        else:
+            return 0
+
+        return self.repository.save_remote_videos(channel.id, channel.platform, channel.name, rvs)
+
+    def _handle_history_update(self, video: Video) -> None:
+        if not video.channel_id:
+            return
+
+        channel = self.storage.get_channel_by_id(video.channel_id)
+        if not channel:
+            return
+
+        self.app_state.handle_event(Event.HISTORY_UPDATE)
+        self.ui.render(self.app_state)
+        try:
+            oldest_date = self.repository.get_oldest_video_date(video.channel_id)
+            added = self._sync_channel_videos(channel, fetch_type="history", published_before=oldest_date, limit=50)
+            self.app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=added)
+            self.refresh_app_state()
+        except Exception as e:
+            self.app_state.handle_event(Event.UPDATE_FAILED, error=str(e))
+
+    def _run_registration_flow(self) -> None:
+        self.ui.render(self.app_state)
+        try:
+            platform_key = self.ui.get_input_string("  入力: ", self.ui.height // 2 - 2, self.ui.width // 2 - 20)
+            if not platform_key:
+                 self.app_state.handle_event(Event.BACK_TO_UI)
+                 return
+
+            platform_name = "youtube"
+            self.ui.render(self.app_state)
+
+            channel_name = self.ui.get_input_string("  入力: ", self.ui.height // 2 + 1, self.ui.width // 2 - 20)
+
+            if channel_name:
+                self.app_state.handle_event(Event.UPDATE_STARTED)
+                self.ui.render(self.app_state)
+
+                external_id = self.channel_resolver.resolve(platform_name, channel_name)
+                channel_id = self.repository.save_channel(platform_name, channel_name, external_id)
+
+                # Wrap it in a channel-like object for sync_channel_videos
+                from collections import namedtuple
+                DummyChannel = namedtuple('DummyChannel', ['id', 'platform', 'name', 'external_id'])
+                dummy_channel = DummyChannel(channel_id, platform_name, channel_name, external_id)
+                self._sync_channel_videos(dummy_channel, fetch_type="recent", limit=50)
+
+                self.app_state.handle_event(Event.REGISTRATION_SUCCEEDED)
+                self.refresh_app_state()
+            else:
+                self.app_state.handle_event(Event.BACK_TO_UI)
+        except Exception as e:
+            self.app_state.handle_event(Event.REGISTRATION_FAILED, error=str(e))
 
     def handle_input(self) -> bool:
         running = True
@@ -145,9 +226,8 @@ class VideoPlayerApp:
             self.app_state.handle_event(Event.TAB_NEXT)
             self.refresh_app_state()
         elif key == ord('\n') or key == curses.KEY_ENTER:
-            videos = self.app_state.get_filtered_videos()
-            if 0 <= self.app_state.selected_idx < len(videos):
-                video = videos[self.app_state.selected_idx]
+            video = self._get_selected_video()
+            if video:
                 self._mark_and_transition(Event.PLAY_SELECTED, video=video)
         elif key == ord('n'):
             if self.app_state.next_video:
@@ -165,56 +245,16 @@ class VideoPlayerApp:
                 self.app_state.handle_event(Event.UPDATE)
                 self.app_state.busy_until = datetime.now() + timedelta(milliseconds=100)
         elif key == ord('i'):
-            videos = self.app_state.get_filtered_videos()
-            if 0 <= self.app_state.selected_idx < len(videos):
-                video = videos[self.app_state.selected_idx]
-                if video.channel_id:
-                    channel = self.storage.get_channel_by_id(video.channel_id)
-                    if channel:
-                        self.app_state.handle_event(Event.HISTORY_UPDATE)
-                        self.ui.render(self.app_state)
-                        try:
-                            oldest_date = self.repository.get_oldest_video_date(video.channel_id)
-                            rvs = self.video_fetcher.fetch_history(channel.platform, channel.external_id, published_before=oldest_date, limit=50)
-                            added = self.repository.save_remote_videos(channel.id, channel.platform, channel.name, rvs)
-                            self.app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=added)
-                            self.refresh_app_state()
-                        except Exception as e:
-                            self.app_state.handle_event(Event.UPDATE_FAILED, error=str(e))
+            video = self._get_selected_video()
+            if video:
+                self._handle_history_update(video)
         elif key == ord('a'):
             if self.app_state.state != State.REGISTER:
                 self.app_state.handle_event(Event.REGISTER)
                 self.app_state.error_message = None
 
         if self.app_state.state == State.REGISTER:
-            self.ui.render(self.app_state)
-            try:
-                platform_key = self.ui.get_input_string("  入力: ", self.ui.height // 2 - 2, self.ui.width // 2 - 20)
-                if not platform_key:
-                     self.app_state.handle_event(Event.BACK_TO_UI)
-                     return running
-
-                platform_name = "youtube"
-                self.ui.render(self.app_state)
-
-                channel_name = self.ui.get_input_string("  入力: ", self.ui.height // 2 + 1, self.ui.width // 2 - 20)
-
-                if channel_name:
-                    self.app_state.handle_event(Event.UPDATE_STARTED)
-                    self.ui.render(self.app_state)
-
-                    external_id = self.channel_resolver.resolve(platform_name, channel_name)
-                    channel_id = self.repository.save_channel(platform_name, channel_name, external_id)
-
-                    rvs = self.video_fetcher.fetch_recent(platform_name, external_id, limit=50)
-                    self.repository.save_remote_videos(channel_id, platform_name, channel_name, rvs)
-
-                    self.app_state.handle_event(Event.REGISTRATION_SUCCEEDED)
-                    self.refresh_app_state()
-                else:
-                    self.app_state.handle_event(Event.BACK_TO_UI)
-            except Exception as e:
-                self.app_state.handle_event(Event.REGISTRATION_FAILED, error=str(e))
+            self._run_registration_flow()
         elif key == ord('r'):
             self.app_state.handle_event(Event.RANDOM_REFRESH)
             self.refresh_app_state()
