@@ -183,14 +183,8 @@ class VideoPlayerApp:
                 channel_id = self.repository.save_channel(platform_name, channel_name, external_id)
 
                 # Wrap it in a channel-like object for sync_channel_videos
-                from dataclasses import dataclass
-                @dataclass
-                class DummyChannel:
-                    id: int
-                    platform: str
-                    name: str
-                    external_id: str
-
+                from collections import namedtuple
+                DummyChannel = namedtuple('DummyChannel', ['id', 'platform', 'name', 'external_id'])
                 dummy_channel = DummyChannel(channel_id, platform_name, channel_name, external_id)
                 self._sync_channel_videos(dummy_channel, fetch_type="recent", limit=50)
 
