@@ -195,8 +195,59 @@ class VideoPlayerApp:
         except Exception as e:
             self.app_state.handle_event(Event.REGISTRATION_FAILED, error=str(e))
 
+    def _on_key_help(self) -> None:
+        self.app_state.handle_event(Event.HELP_TOGGLE)
+
+    def _on_key_down(self) -> None:
+        self.app_state.handle_event(Event.CURSOR_DOWN)
+
+    def _on_key_up(self) -> None:
+        self.app_state.handle_event(Event.CURSOR_UP)
+
+    def _on_key_tab(self) -> None:
+        self.app_state.handle_event(Event.TAB_NEXT)
+        self.refresh_app_state()
+
+    def _on_key_play(self) -> None:
+        video = self._get_selected_video()
+        if video:
+            self._mark_and_transition(Event.PLAY_SELECTED, video=video)
+
+    def _on_key_next(self) -> None:
+        if self.app_state.next_video:
+            self._mark_and_transition(Event.NEXT, video=self.app_state.next_video)
+        else:
+            self._mark_and_transition(Event.NEXT)
+
+    def _on_key_stop(self) -> None:
+        self.player.stop()
+        self._mark_and_transition(Event.STOP)
+
+    def _on_key_back(self) -> None:
+        self.app_state.handle_event(Event.BACK_TO_UI)
+        self.refresh_app_state()
+
+    def _on_key_update(self) -> None:
+        if self.app_state.state != State.UPDATING:
+            self.app_state.handle_event(Event.UPDATE)
+            self.app_state.busy_until = datetime.now() + timedelta(milliseconds=100)
+
+    def _on_key_history(self) -> None:
+        video = self._get_selected_video()
+        if video:
+            self._handle_history_update(video)
+
+    def _on_key_add(self) -> None:
+        if self.app_state.state != State.REGISTER:
+            self.app_state.handle_event(Event.REGISTER)
+            self.app_state.error_message = None
+            self._run_registration_flow()
+
+    def _on_key_random(self) -> None:
+        self.app_state.handle_event(Event.RANDOM_REFRESH)
+        self.refresh_app_state()
+
     def handle_input(self) -> bool:
-        running = True
         keys = []
         while True:
             try:
@@ -208,7 +259,7 @@ class VideoPlayerApp:
                 break
 
         if not keys:
-            return running
+            return True
 
         if any(k == ord('q') for k in keys):
             self.player.stop()
@@ -216,50 +267,30 @@ class VideoPlayerApp:
 
         key = keys[-1]
 
-        if key == ord('h'):
-            self.app_state.handle_event(Event.HELP_TOGGLE)
-        elif key == ord('j') or key == curses.KEY_DOWN:
-            self.app_state.handle_event(Event.CURSOR_DOWN)
-        elif key == ord('k') or key == curses.KEY_UP:
-            self.app_state.handle_event(Event.CURSOR_UP)
-        elif key == ord('\t'):
-            self.app_state.handle_event(Event.TAB_NEXT)
-            self.refresh_app_state()
-        elif key == ord('\n') or key == curses.KEY_ENTER:
-            video = self._get_selected_video()
-            if video:
-                self._mark_and_transition(Event.PLAY_SELECTED, video=video)
-        elif key == ord('n'):
-            if self.app_state.next_video:
-                self._mark_and_transition(Event.NEXT, video=self.app_state.next_video)
-            else:
-                self._mark_and_transition(Event.NEXT)
-        elif key == ord('s'):
-            self.player.stop()
-            self._mark_and_transition(Event.STOP)
-        elif key == ord('b'):
-            self.app_state.handle_event(Event.BACK_TO_UI)
-            self.refresh_app_state()
-        elif key == ord('u'):
-            if self.app_state.state != State.UPDATING:
-                self.app_state.handle_event(Event.UPDATE)
-                self.app_state.busy_until = datetime.now() + timedelta(milliseconds=100)
-        elif key == ord('i'):
-            video = self._get_selected_video()
-            if video:
-                self._handle_history_update(video)
-        elif key == ord('a'):
-            if self.app_state.state != State.REGISTER:
-                self.app_state.handle_event(Event.REGISTER)
-                self.app_state.error_message = None
+        # Dispatcher map for key actions
+        action_map = {
+            ord('h'): self._on_key_help,
+            ord('j'): self._on_key_down,
+            curses.KEY_DOWN: self._on_key_down,
+            ord('k'): self._on_key_up,
+            curses.KEY_UP: self._on_key_up,
+            ord('\t'): self._on_key_tab,
+            ord('\n'): self._on_key_play,
+            curses.KEY_ENTER: self._on_key_play,
+            ord('n'): self._on_key_next,
+            ord('s'): self._on_key_stop,
+            ord('b'): self._on_key_back,
+            ord('u'): self._on_key_update,
+            ord('i'): self._on_key_history,
+            ord('a'): self._on_key_add,
+            ord('r'): self._on_key_random,
+        }
 
-        if self.app_state.state == State.REGISTER:
-            self._run_registration_flow()
-        elif key == ord('r'):
-            self.app_state.handle_event(Event.RANDOM_REFRESH)
-            self.refresh_app_state()
+        handler = action_map.get(key)
+        if handler:
+            handler()
 
-        return running
+        return True
 
 def main(stdscr: Any) -> None:
     if curses.has_colors():
