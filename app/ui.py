@@ -56,6 +56,12 @@ class Tui:
             return text
         return text + (" " * (target_width - current_width))
 
+    def _adjust_scroll(self, selected_idx: int, main_height: int) -> None:
+        if selected_idx < self.scroll_offset:
+            self.scroll_offset = selected_idx
+        elif selected_idx >= self.scroll_offset + main_height:
+            self.scroll_offset = selected_idx - main_height + 1
+
     def draw_main_area(self, state: AppState):
         self.main_win.erase()
         main_height, _ = self.main_win.getmaxyx()
@@ -64,51 +70,44 @@ class Tui:
         if not videos:
             self.main_win.addstr(1, 2, "No videos found.")
         else:
-            # Adjust scroll offset if necessary
-            if state.selected_idx < self.scroll_offset:
-                self.scroll_offset = state.selected_idx
-            elif state.selected_idx >= self.scroll_offset + main_height:
-                self.scroll_offset = state.selected_idx - main_height + 1
+            self._adjust_scroll(state.selected_idx, main_height)
 
             for i in range(main_height):
                 video_idx = i + self.scroll_offset
                 if video_idx >= len(videos):
                     break
-
-                video = videos[video_idx]
-                prefix = ">" if video_idx == state.selected_idx else " "
-                viewed_mark = "[v]" if video.viewed else "[ ]"
-
-                # Calculate max title length to avoid overflow
-                # Space for prefix(2), viewed_mark(4), space(1), channel(varies), parens(2)
-                channel_info = f"({video.channel})"
-                available_width = self.width - 10 - len(channel_info)
-                title = self._truncate_with_width(video.title, available_width)
-                line = f"{prefix} {viewed_mark} {title} {channel_info}"
-
-                # Avoid writing to the last column of the last line to prevent ERR
-                # Using self.width - 2 for extra safety
-                display_line = self._truncate_with_width(line, self.width - 2)
-
-                try:
-                    if video_idx == state.selected_idx:
-                        self.main_win.attron(curses.A_REVERSE)
-                        # Use custom pad instead of ljust (which is char-count based)
-                        padded_line = self._pad_with_width(display_line, self.width - 2)
-                        self.main_win.addstr(i, 0, padded_line)
-                        self.main_win.attroff(curses.A_REVERSE)
-                    else:
-                        self.main_win.addstr(i, 0, display_line)
-                except curses.error:
-                    pass # Ignore write errors to the very edge
+                self._draw_video_line(i, video_idx, videos[video_idx], state.selected_idx)
 
         self.main_win.noutrefresh()
 
-    def draw_footer(self, state: AppState):
-        self.footer_win.erase()
-        self.footer_win.box()
+    def _draw_video_line(self, y: int, video_idx: int, video: Video, selected_idx: int) -> None:
+        prefix = ">" if video_idx == selected_idx else " "
+        viewed_mark = "[v]" if video.viewed else "[ ]"
 
-        # 1行目: 再生ステータスとタイトル
+        # Calculate max title length to avoid overflow
+        # Space for prefix(2), viewed_mark(4), space(1), channel(varies), parens(2)
+        channel_info = f"({video.channel})"
+        available_width = self.width - 10 - len(channel_info)
+        title = self._truncate_with_width(video.title, available_width)
+        line = f"{prefix} {viewed_mark} {title} {channel_info}"
+
+        # Avoid writing to the last column of the last line to prevent ERR
+        # Using self.width - 2 for extra safety
+        display_line = self._truncate_with_width(line, self.width - 2)
+
+        try:
+            if video_idx == selected_idx:
+                self.main_win.attron(curses.A_REVERSE)
+                # Use custom pad instead of ljust (which is char-count based)
+                padded_line = self._pad_with_width(display_line, self.width - 2)
+                self.main_win.addstr(y, 0, padded_line)
+                self.main_win.attroff(curses.A_REVERSE)
+            else:
+                self.main_win.addstr(y, 0, display_line)
+        except curses.error:
+            pass # Ignore write errors to the very edge
+
+    def _get_status_text(self, state: AppState) -> str:
         status_text = "▶ Ready"
         if state.state == State.LAUNCHING:
             video = state.selected_video
@@ -123,6 +122,14 @@ class Tui:
             status_text = f"⏹ 再生終了: {title}"
         elif state.state == State.ERROR:
             status_text = "⚠ エラーが発生しました"
+        return status_text
+
+    def draw_footer(self, state: AppState):
+        self.footer_win.erase()
+        self.footer_win.box()
+
+        # 1行目: 再生ステータスとタイトル
+        status_text = self._get_status_text(state)
 
         # ウィンドウ幅（全角考慮）に合わせて切り捨て
         display_line1 = self._truncate_with_width(status_text, self.width - 6)

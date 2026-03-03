@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Any, List
 from .state import AppState, State
 from .events import Event
-from .models import Video
+from .models import Video, Channel
 from .storage import VideoStorage
 from .player import MpvPlayer, MPV_EXIT_CODE_NEXT
 from .ui import Tui
@@ -48,16 +48,19 @@ class VideoPlayerApp:
             return []
         return []
 
+    def _get_active_video_id(self) -> Optional[str]:
+        if self.app_state.now_playing:
+            return self.app_state.now_playing.id
+        elif self.app_state.state == State.LAUNCHING and self.app_state.selected_video:
+            return self.app_state.selected_video.id
+        return None
+
     def refresh_app_state(self) -> None:
         # Refresh display videos
         self.app_state.handle_event(Event.CACHE_LOADED, videos=self.get_display_videos())
 
         # Update next video cache
-        current_id = None
-        if self.app_state.now_playing:
-            current_id = self.app_state.now_playing.id
-        elif self.app_state.state == State.LAUNCHING and self.app_state.selected_video:
-            current_id = self.app_state.selected_video.id
+        current_id = self._get_active_video_id()
 
         self.app_state.next_video = self.storage.select_next_video(
                                                 current_id=current_id,
@@ -182,11 +185,15 @@ class VideoPlayerApp:
                 external_id = self.channel_resolver.resolve(platform_name, channel_name)
                 channel_id = self.repository.save_channel(platform_name, channel_name, external_id)
 
-                # Wrap it in a channel-like object for sync_channel_videos
-                from collections import namedtuple
-                DummyChannel = namedtuple('DummyChannel', ['id', 'platform', 'name', 'external_id'])
-                dummy_channel = DummyChannel(channel_id, platform_name, channel_name, external_id)
-                self._sync_channel_videos(dummy_channel, fetch_type="recent", limit=50)
+                # Use Channel model for sync_channel_videos
+                channel = Channel(
+                    id=channel_id,
+                    platform=platform_name,
+                    name=channel_name,
+                    external_id=external_id,
+                    created_at=datetime.now()
+                )
+                self._sync_channel_videos(channel, fetch_type="recent", limit=50)
 
                 self.app_state.handle_event(Event.REGISTRATION_SUCCEEDED)
                 self.refresh_app_state()
