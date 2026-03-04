@@ -157,6 +157,22 @@ class VideoStorage:
             row = cursor.fetchone()
             return self._row_to_channel(row) if row else None
 
+    def get_latest_video_date(self, channel_id: int) -> Optional[datetime]:
+        with self._connection() as conn:
+            cursor = conn.execute("SELECT MAX(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))
+            row = cursor.fetchone()
+            if row and row[0]:
+                return datetime.fromisoformat(row[0])
+        return None
+
+    def get_oldest_video_date(self, channel_id: int) -> Optional[datetime]:
+        with self._connection() as conn:
+            cursor = conn.execute("SELECT MIN(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))
+            row = cursor.fetchone()
+            if row and row[0]:
+                return datetime.fromisoformat(row[0])
+        return None
+
     def get_new_videos(self, limit: int = 100) -> List[Video]:
         with self._connection() as conn:
             cursor = conn.execute("SELECT * FROM videos ORDER BY upload_date DESC LIMIT ?", (limit,))

@@ -30,17 +30,7 @@ class Repository:
         return added_count
 
     def get_latest_video_date(self, channel_id: int) -> Optional[datetime]:
-        with self.storage._connection() as conn:
-            cursor = conn.execute("SELECT MAX(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))
-            row = cursor.fetchone()
-            if row and row[0]:
-                return datetime.fromisoformat(row[0])
-        return None
+        return self.storage.get_latest_video_date(channel_id)
 
     def get_oldest_video_date(self, channel_id: int) -> Optional[datetime]:
-        with self.storage._connection() as conn:
-            cursor = conn.execute("SELECT MIN(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))
-            row = cursor.fetchone()
-            if row and row[0]:
-                return datetime.fromisoformat(row[0])
-        return None
+        return self.storage.get_oldest_video_date(channel_id)
