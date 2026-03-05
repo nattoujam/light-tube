@@ -82,6 +82,8 @@ class AppState:
             self._handle_register(event, **kwargs)
         elif self.state == State.LOADING:
             self._handle_loading(event, **kwargs)
+        elif self.state == State.CONFIRM_DELETE:
+            self._handle_confirm_delete(event, **kwargs)
         elif self.state == State.ERROR:
             self._handle_error(event, **kwargs)
 
@@ -170,6 +172,10 @@ class AppState:
         elif event == Event.REGISTRATION_FAILED:
             self.error_message = str(kwargs.get('error'))
             self.state = State.ERROR
+
+    def _handle_confirm_delete(self, event: Event, **kwargs: Any) -> None:
+        if event == Event.BACK_TO_UI:
+            self.state = State.BROWSE
 
     def _handle_error(self, event: Event, **kwargs: Any) -> None:
         if event == Event.BACK_TO_UI:
