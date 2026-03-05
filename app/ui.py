@@ -2,7 +2,7 @@ import curses
 from typing import List, Optional, Tuple
 import random
 from .state import AppState, State
-from .models import Video
+from .models import Video, Channel
 
 class Tui:
     def __init__(self, stdscr):
@@ -66,19 +66,47 @@ class Tui:
         self.main_win.erase()
         main_height, _ = self.main_win.getmaxyx()
 
-        videos = state.get_filtered_videos()
-        if not videos:
-            self.main_win.addstr(1, 2, "No videos found.")
+        if state.current_tab == "Channels":
+            channels = state.display_channels
+            if not channels:
+                self.main_win.addstr(1, 2, "No channels registered.")
+            else:
+                self._adjust_scroll(state.selected_idx, main_height)
+                for i in range(main_height):
+                    channel_idx = i + self.scroll_offset
+                    if channel_idx >= len(channels):
+                        break
+                    self._draw_channel_line(i, channel_idx, channels[channel_idx], state.selected_idx)
         else:
-            self._adjust_scroll(state.selected_idx, main_height)
+            videos = state.get_filtered_videos()
+            if not videos:
+                self.main_win.addstr(1, 2, "No videos found.")
+            else:
+                self._adjust_scroll(state.selected_idx, main_height)
 
-            for i in range(main_height):
-                video_idx = i + self.scroll_offset
-                if video_idx >= len(videos):
-                    break
-                self._draw_video_line(i, video_idx, videos[video_idx], state.selected_idx)
+                for i in range(main_height):
+                    video_idx = i + self.scroll_offset
+                    if video_idx >= len(videos):
+                        break
+                    self._draw_video_line(i, video_idx, videos[video_idx], state.selected_idx)
 
         self.main_win.noutrefresh()
+
+    def _draw_channel_line(self, y: int, idx: int, channel: Any, selected_idx: int) -> None:
+        prefix = ">" if idx == selected_idx else " "
+        line = f"{prefix} {channel.name} ({channel.platform})"
+        display_line = self._truncate_with_width(line, self.width - 2)
+
+        try:
+            if idx == selected_idx:
+                self.main_win.attron(curses.A_REVERSE)
+                padded_line = self._pad_with_width(display_line, self.width - 2)
+                self.main_win.addstr(y, 0, padded_line)
+                self.main_win.attroff(curses.A_REVERSE)
+            else:
+                self.main_win.addstr(y, 0, display_line)
+        except curses.error:
+            pass
 
     def _draw_video_line(self, y: int, video_idx: int, video: Video, selected_idx: int) -> None:
         prefix = ">" if video_idx == selected_idx else " "
@@ -136,7 +164,11 @@ class Tui:
         self.footer_win.addstr(1, 2, display_line1)
 
         # 2行目: 次の動画と操作ガイド
-        guide_text = "[n:Next] [s:Stop] [b:Back] [u:Update] [i:History] [a:Add]"
+        if state.current_tab == "Channels":
+            guide_text = "[d:Delete] [a:Add] [b:Back] [u:Update] [h:Help]"
+        else:
+            guide_text = "[n:Next] [s:Stop] [b:Back] [u:Update] [i:History] [h:Help]"
+
         next_video = state.next_video
         if next_video:
             # Reserve space for guide_text at the right
@@ -151,8 +183,8 @@ class Tui:
 
     def draw_help(self):
         if not self.help_win:
-            # Increased height to 15 to accommodate all items including border
-            self.help_win = curses.newwin(15, 40, self.height // 2 - 7, self.width // 2 - 20)
+            # Increased height to 16 to accommodate all items including border
+            self.help_win = curses.newwin(16, 40, self.height // 2 - 8, self.width // 2 - 20)
         self.help_win.erase()
         self.help_win.box()
         self.help_win.addstr(1, 2, "Keys:")
@@ -163,11 +195,12 @@ class Tui:
         self.help_win.addstr(6, 2, "s: Stop")
         self.help_win.addstr(7, 2, "u: Update Latest")
         self.help_win.addstr(8, 2, "i: Update History")
-        self.help_win.addstr(9, 2, "a: Add Channel")
-        self.help_win.addstr(10, 2, "r: Random Refresh")
-        self.help_win.addstr(11, 2, "b: Back to UI")
-        self.help_win.addstr(12, 2, "h: Toggle Help")
-        self.help_win.addstr(13, 2, "q: Quit")
+        self.help_win.addstr(9, 2, "a: Add Channel (Channel Tab only)")
+        self.help_win.addstr(10, 2, "d: Delete Channel (Channel Tab only)")
+        self.help_win.addstr(11, 2, "r: Random Refresh")
+        self.help_win.addstr(12, 2, "b: Back to UI")
+        self.help_win.addstr(13, 2, "h: Toggle Help")
+        self.help_win.addstr(14, 2, "q: Quit")
         self.help_win.noutrefresh()
 
     def render(self, state: AppState):

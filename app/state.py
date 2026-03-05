@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Any
 import random
-from .models import Video
+from .models import Video, Channel
 from .events import Event
 
 class State(Enum):
@@ -22,6 +22,7 @@ class AppState:
     state: State = State.BOOT
     current_tab: str = "New"
     display_videos: List[Video] = field(default_factory=list)
+    display_channels: List[Channel] = field(default_factory=list)
     selected_idx: int = 0
     show_help: bool = False
     busy_until: Optional[datetime] = None
@@ -48,12 +49,14 @@ class AppState:
             return
 
         if event == Event.CURSOR_DOWN:
-            if self.selected_idx < len(self.display_videos) - 1:
+            limit = len(self.display_channels) if self.current_tab == "Channels" else len(self.display_videos)
+            if self.selected_idx < limit - 1:
                 self.selected_idx += 1
             return
 
         if event == Event.CACHE_LOADED:
             self.display_videos = kwargs.get('videos', [])
+            self.display_channels = kwargs.get('channels', [])
             if self.state == State.BOOT:
                 self.state = State.BROWSE
             return
@@ -90,7 +93,7 @@ class AppState:
             self.previous_state = self.state
             self.state = State.REGISTER
         elif event == Event.TAB_NEXT or event == Event.TAB_PREV:
-            tabs = ["New", "Random", "Related"]
+            tabs = ["New", "Random", "Related", "Channels"]
             idx = tabs.index(self.current_tab)
             if event == Event.TAB_NEXT:
                 self.current_tab = tabs[(idx + 1) % len(tabs)]

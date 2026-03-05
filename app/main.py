@@ -57,7 +57,9 @@ class VideoPlayerApp:
 
     def refresh_app_state(self) -> None:
         # Refresh display videos
-        self.app_state.handle_event(Event.CACHE_LOADED, videos=self.get_display_videos())
+        videos = self.get_display_videos()
+        channels = self.storage.get_channels() if self.app_state.current_tab == "Channels" else []
+        self.app_state.handle_event(Event.CACHE_LOADED, videos=videos, channels=channels)
 
         # Update next video cache
         current_id = self._get_active_video_id()
@@ -129,6 +131,12 @@ class VideoPlayerApp:
         videos = self.app_state.get_filtered_videos()
         if 0 <= self.app_state.selected_idx < len(videos):
             return videos[self.app_state.selected_idx]
+        return None
+
+    def _get_selected_channel(self) -> Optional[Channel]:
+        channels = self.app_state.display_channels
+        if 0 <= self.app_state.selected_idx < len(channels):
+            return channels[self.app_state.selected_idx]
         return None
 
     def _sync_channel_videos(self, channel: Any, fetch_type: str = "recent", **kwargs: Any) -> int:
@@ -245,10 +253,23 @@ class VideoPlayerApp:
             self._handle_history_update(video)
 
     def _on_key_add(self) -> None:
+        if self.app_state.current_tab != "Channels":
+            return
         if self.app_state.state != State.REGISTER:
             self.app_state.handle_event(Event.REGISTER)
             self.app_state.error_message = None
             self._run_registration_flow()
+
+    def _on_key_delete(self) -> None:
+        if self.app_state.current_tab != "Channels":
+            return
+        channel = self._get_selected_channel()
+        if channel:
+            self.storage.delete_channel(channel.id)
+            self.refresh_app_state()
+            # Adjust selection if necessary
+            if self.app_state.selected_idx >= len(self.app_state.display_channels) and self.app_state.selected_idx > 0:
+                self.app_state.selected_idx = len(self.app_state.display_channels) - 1
 
     def _on_key_random(self) -> None:
         self.app_state.handle_event(Event.RANDOM_REFRESH)
@@ -290,6 +311,7 @@ class VideoPlayerApp:
             ord('u'): self._on_key_update,
             ord('i'): self._on_key_history,
             ord('a'): self._on_key_add,
+            ord('d'): self._on_key_delete,
             ord('r'): self._on_key_random,
         }
 
