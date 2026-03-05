@@ -93,7 +93,7 @@ class Tui:
 
         self.main_win.noutrefresh()
 
-    def _draw_channel_line(self, y: int, idx: int, channel: Any, selected_idx: int) -> None:
+    def _draw_channel_line(self, y: int, idx: int, channel: Channel, selected_idx: int) -> None:
         prefix = ">" if idx == selected_idx else " "
         line = f"{prefix} {channel.name} ({channel.platform})"
         display_line = self._truncate_with_width(line, self.width - 2)
