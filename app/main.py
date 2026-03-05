@@ -224,11 +224,15 @@ class VideoPlayerApp:
         self.refresh_app_state()
 
     def _on_key_play(self) -> None:
+        if self.app_state.current_tab == "Channels":
+            return
         video = self._get_selected_video()
         if video:
             self._mark_and_transition(Event.PLAY_SELECTED, video=video)
 
     def _on_key_next(self) -> None:
+        if self.app_state.current_tab == "Channels":
+            return
         if self.app_state.next_video:
             self._mark_and_transition(Event.NEXT, video=self.app_state.next_video)
         else:
