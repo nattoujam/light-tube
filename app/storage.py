@@ -134,6 +134,11 @@ class VideoStorage:
             row = cursor.fetchone()
             return self._row_to_channel(row) if row else None
 
+    def delete_channel(self, channel_id: int) -> None:
+        with self._connection() as conn:
+            conn.execute("DELETE FROM videos WHERE channel_id = ?", (channel_id,))
+            conn.execute("DELETE FROM channels WHERE id = ?", (channel_id,))
+
     def get_latest_video_date(self, channel_id: int) -> Optional[datetime]:
         with self._connection() as conn:
             cursor = conn.execute("SELECT MAX(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))

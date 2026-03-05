@@ -56,8 +56,10 @@ class VideoPlayerApp:
         return None
 
     def refresh_app_state(self) -> None:
-        # Refresh display videos
-        self.app_state.handle_event(Event.CACHE_LOADED, videos=self.get_display_videos())
+        # Refresh display videos and channels
+        videos = self.get_display_videos()
+        channels = self.storage.get_channels()
+        self.app_state.handle_event(Event.CACHE_LOADED, videos=videos, channels=channels)
 
         # Update next video cache
         current_id = self._get_active_video_id()
@@ -131,7 +133,13 @@ class VideoPlayerApp:
             return videos[self.app_state.selected_idx]
         return None
 
-    def _sync_channel_videos(self, channel: Any, fetch_type: str = "recent", **kwargs: Any) -> int:
+    def _get_selected_channel(self) -> Optional[Channel]:
+        channels = self.app_state.display_channels
+        if 0 <= self.app_state.selected_idx < len(channels):
+            return channels[self.app_state.selected_idx]
+        return None
+
+    def _sync_channel_videos(self, channel: Channel, fetch_type: str = "recent", **kwargs: Any) -> int:
         """
         Fetch and save videos for a channel.
         fetch_type can be "recent" or "history".
@@ -168,14 +176,24 @@ class VideoPlayerApp:
     def _run_registration_flow(self) -> None:
         self.ui.render(self.app_state)
         try:
-            platform_key = self.ui.get_input_string("  入力: ", self.ui.height // 2 - 2, self.ui.width // 2 - 20)
-            if not platform_key:
-                 self.app_state.handle_event(Event.BACK_TO_UI)
-                 return
+            # Step 1: Platform selection (Single key)
+            self.stdscr.nodelay(False)
+            key = self.stdscr.getch()
+            self.stdscr.nodelay(True)
+
+            if key == ord('b') or key == 27: # 'b' or ESC
+                self.app_state.handle_event(Event.BACK_TO_UI)
+                return
+
+            # For now, only 'y' (YouTube) is supported
+            if key != ord('y'):
+                self.app_state.handle_event(Event.BACK_TO_UI)
+                return
 
             platform_name = "youtube"
             self.ui.render(self.app_state)
 
+            # Step 2: Channel Name input
             channel_name = self.ui.get_input_string("  入力: ", self.ui.height // 2 + 1, self.ui.width // 2 - 20)
 
             if channel_name:
@@ -216,11 +234,15 @@ class VideoPlayerApp:
         self.refresh_app_state()
 
     def _on_key_play(self) -> None:
+        if self.app_state.current_tab == "Channels":
+            return
         video = self._get_selected_video()
         if video:
             self._mark_and_transition(Event.PLAY_SELECTED, video=video)
 
     def _on_key_next(self) -> None:
+        if self.app_state.current_tab == "Channels":
+            return
         if self.app_state.next_video:
             self._mark_and_transition(Event.NEXT, video=self.app_state.next_video)
         else:
@@ -245,10 +267,17 @@ class VideoPlayerApp:
             self._handle_history_update(video)
 
     def _on_key_add(self) -> None:
+        if self.app_state.current_tab != "Channels":
+            return
         if self.app_state.state != State.REGISTER:
-            self.app_state.handle_event(Event.REGISTER)
+            self.app_state.handle_event(Event.REGISTER_CHANNEL)
             self.app_state.error_message = None
             self._run_registration_flow()
+
+    def _on_key_delete(self) -> None:
+        if self.app_state.current_tab != "Channels":
+            return
+        self.app_state.handle_event(Event.DELETE_CHANNEL)
 
     def _on_key_random(self) -> None:
         self.app_state.handle_event(Event.RANDOM_REFRESH)
@@ -274,6 +303,20 @@ class VideoPlayerApp:
 
         key = keys[-1]
 
+        # Handle keys specifically for confirmation state
+        if self.app_state.state == State.CONFIRM_DELETE:
+            if key == ord('y'):
+                channel = self._get_selected_channel()
+                if channel:
+                    self.storage.delete_channel(channel.id)
+                    self.refresh_app_state()
+                self.app_state.handle_event(Event.BACK_TO_UI)
+                return True
+            elif key == ord('n') or key == ord('b'):
+                self.app_state.handle_event(Event.BACK_TO_UI)
+                return True
+            return True
+
         # Dispatcher map for key actions
         action_map = {
             ord('h'): self._on_key_help,
@@ -290,6 +333,7 @@ class VideoPlayerApp:
             ord('u'): self._on_key_update,
             ord('i'): self._on_key_history,
             ord('a'): self._on_key_add,
+            ord('d'): self._on_key_delete,
             ord('r'): self._on_key_random,
         }
 

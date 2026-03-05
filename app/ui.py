@@ -2,7 +2,7 @@ import curses
 from typing import List, Optional, Tuple
 import random
 from .state import AppState, State
-from .models import Video
+from .models import Video, Channel
 
 class Tui:
     def __init__(self, stdscr):
@@ -16,6 +16,7 @@ class Tui:
         self.main_win = curses.newwin(self.height - 6, self.width, 2, 0)
         self.footer_win = curses.newwin(4, self.width, self.height - 4, 0)
         self.register_win = curses.newwin(12, 60, self.height // 2 - 6, self.width // 2 - 30)
+        self.confirm_win = curses.newwin(8, 60, self.height // 2 - 4, self.width // 2 - 30)
         self.error_win = curses.newwin(10, 60, self.height // 2 - 5, self.width // 2 - 30)
         self.help_win = None
 
@@ -66,19 +67,47 @@ class Tui:
         self.main_win.erase()
         main_height, _ = self.main_win.getmaxyx()
 
-        videos = state.get_filtered_videos()
-        if not videos:
-            self.main_win.addstr(1, 2, "No videos found.")
+        if state.current_tab == "Channels":
+            channels = state.display_channels
+            if not channels:
+                self.main_win.addstr(1, 2, "No channels registered.")
+            else:
+                self._adjust_scroll(state.selected_idx, main_height)
+                for i in range(main_height):
+                    channel_idx = i + self.scroll_offset
+                    if channel_idx >= len(channels):
+                        break
+                    self._draw_channel_line(i, channel_idx, channels[channel_idx], state.selected_idx)
         else:
-            self._adjust_scroll(state.selected_idx, main_height)
+            videos = state.get_filtered_videos()
+            if not videos:
+                self.main_win.addstr(1, 2, "No videos found.")
+            else:
+                self._adjust_scroll(state.selected_idx, main_height)
 
-            for i in range(main_height):
-                video_idx = i + self.scroll_offset
-                if video_idx >= len(videos):
-                    break
-                self._draw_video_line(i, video_idx, videos[video_idx], state.selected_idx)
+                for i in range(main_height):
+                    video_idx = i + self.scroll_offset
+                    if video_idx >= len(videos):
+                        break
+                    self._draw_video_line(i, video_idx, videos[video_idx], state.selected_idx)
 
         self.main_win.noutrefresh()
+
+    def _draw_channel_line(self, y: int, idx: int, channel: Channel, selected_idx: int) -> None:
+        prefix = ">" if idx == selected_idx else " "
+        line = f"{prefix} {channel.name} ({channel.platform})"
+        display_line = self._truncate_with_width(line, self.width - 2)
+
+        try:
+            if idx == selected_idx:
+                self.main_win.attron(curses.A_REVERSE)
+                padded_line = self._pad_with_width(display_line, self.width - 2)
+                self.main_win.addstr(y, 0, padded_line)
+                self.main_win.attroff(curses.A_REVERSE)
+            else:
+                self.main_win.addstr(y, 0, display_line)
+        except curses.error:
+            pass
 
     def _draw_video_line(self, y: int, video_idx: int, video: Video, selected_idx: int) -> None:
         prefix = ">" if video_idx == selected_idx else " "
@@ -136,7 +165,11 @@ class Tui:
         self.footer_win.addstr(1, 2, display_line1)
 
         # 2行目: 次の動画と操作ガイド
-        guide_text = "[n:Next] [s:Stop] [b:Back] [u:Update] [i:History] [a:Add]"
+        if state.current_tab == "Channels":
+            guide_text = "[d:Delete] [a:Add] [b:Back] [u:Update] [h:Help]"
+        else:
+            guide_text = "[n:Next] [s:Stop] [b:Back] [u:Update] [i:History] [h:Help]"
+
         next_video = state.next_video
         if next_video:
             # Reserve space for guide_text at the right
@@ -149,25 +182,37 @@ class Tui:
 
         self.footer_win.noutrefresh()
 
-    def draw_help(self):
-        if not self.help_win:
-            # Increased height to 15 to accommodate all items including border
-            self.help_win = curses.newwin(15, 40, self.height // 2 - 7, self.width // 2 - 20)
+    def draw_help(self, state: AppState):
+        items = [
+            "↑/↓, j/k: Move",
+            "Tab: Switch Tab",
+            "b: Back to UI",
+            "h: Toggle Help",
+            "q: Quit"
+        ]
+
+        if state.current_tab == "Channels":
+            items.insert(2, "a: Add Channel")
+            items.insert(3, "d: Delete Channel")
+            items.insert(4, "u: Update Channels")
+        else:
+            items.insert(2, "Enter: Play")
+            items.insert(3, "n: Next")
+            items.insert(4, "s: Stop")
+            items.insert(5, "u: Update Latest")
+            items.insert(6, "i: Update History")
+            if state.current_tab == "Random":
+                items.insert(7, "r: Random Refresh")
+
+        win_height = len(items) + 4
+        if not self.help_win or self.help_win.getmaxyx()[0] != win_height:
+            self.help_win = curses.newwin(win_height, 40, self.height // 2 - win_height // 2, self.width // 2 - 20)
+
         self.help_win.erase()
         self.help_win.box()
-        self.help_win.addstr(1, 2, "Keys:")
-        self.help_win.addstr(2, 2, "↑/↓, j/k: Move")
-        self.help_win.addstr(3, 2, "Enter: Play")
-        self.help_win.addstr(4, 2, "Tab: Switch Tab")
-        self.help_win.addstr(5, 2, "n: Next")
-        self.help_win.addstr(6, 2, "s: Stop")
-        self.help_win.addstr(7, 2, "u: Update Latest")
-        self.help_win.addstr(8, 2, "i: Update History")
-        self.help_win.addstr(9, 2, "a: Add Channel")
-        self.help_win.addstr(10, 2, "r: Random Refresh")
-        self.help_win.addstr(11, 2, "b: Back to UI")
-        self.help_win.addstr(12, 2, "h: Toggle Help")
-        self.help_win.addstr(13, 2, "q: Quit")
+        self.help_win.addstr(1, 2, f"Help: {state.current_tab}", curses.A_BOLD)
+        for i, item in enumerate(items):
+            self.help_win.addstr(2 + i, 2, item)
         self.help_win.noutrefresh()
 
     def render(self, state: AppState):
@@ -176,21 +221,37 @@ class Tui:
         self.draw_footer(state)
         if state.state == State.REGISTER:
             self.draw_register(state)
+        elif state.state == State.CONFIRM_DELETE:
+            self.draw_confirm_delete(state)
         elif state.state == State.ERROR:
             self.draw_error(state)
         if state.show_help:
-            self.draw_help()
+            self.draw_help(state)
         curses.doupdate()
+
+    def draw_confirm_delete(self, state: AppState):
+        self.confirm_win.erase()
+        self.confirm_win.box()
+        self.confirm_win.addstr(1, 2, "チャンネル削除の確認", curses.A_BOLD)
+
+        channel = None
+        if 0 <= state.selected_idx < len(state.display_channels):
+            channel = state.display_channels[state.selected_idx]
+
+        name = channel.name if channel else "???"
+        self.confirm_win.addstr(3, 2, f"チャンネル 「{name}」 を削除しますか？")
+        self.confirm_win.addstr(4, 2, "紐付く動画データもすべて削除されます。")
+        self.confirm_win.addstr(6, 2, "y: 削除する  /  n: キャンセル", curses.A_REVERSE)
+        self.confirm_win.noutrefresh()
 
     def draw_register(self, state: AppState):
         self.register_win.erase()
         self.register_win.box()
         self.register_win.addstr(1, 2, "チャンネル登録", curses.A_BOLD)
-        self.register_win.addstr(3, 2, "1. プラットフォームを選択 (y: YouTube)")
-        # Input for platform will be on line 4
+        self.register_win.addstr(3, 2, "1. プラットフォームを選択")
+        self.register_win.addstr(4, 5, "(y: YouTube)")
         self.register_win.addstr(6, 2, "2. チャンネル名(YT) を入力")
-        # Input for name will be on line 7
-        self.register_win.addstr(9, 2, "bキーでキャンセル")
+        self.register_win.addstr(9, 2, "bキーまたはEnter空押しでキャンセル")
 
         # エラーメッセージがあれば表示
         if state.error_message:

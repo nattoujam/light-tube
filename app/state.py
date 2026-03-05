@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Any
 import random
-from .models import Video
+from .models import Video, Channel
 from .events import Event
 
 class State(Enum):
@@ -15,6 +15,7 @@ class State(Enum):
     UPDATING = auto()
     REGISTER = auto()
     LOADING = auto()
+    CONFIRM_DELETE = auto()
     ERROR = auto()
 
 @dataclass
@@ -22,6 +23,7 @@ class AppState:
     state: State = State.BOOT
     current_tab: str = "New"
     display_videos: List[Video] = field(default_factory=list)
+    display_channels: List[Channel] = field(default_factory=list)
     selected_idx: int = 0
     show_help: bool = False
     busy_until: Optional[datetime] = None
@@ -48,12 +50,18 @@ class AppState:
             return
 
         if event == Event.CURSOR_DOWN:
-            if self.selected_idx < len(self.display_videos) - 1:
+            limit = len(self.display_channels) if self.current_tab == "Channels" else len(self.display_videos)
+            if self.selected_idx < limit - 1:
                 self.selected_idx += 1
             return
 
         if event == Event.CACHE_LOADED:
             self.display_videos = kwargs.get('videos', [])
+            self.display_channels = kwargs.get('channels', [])
+            # Adjust selected_idx if it's out of bounds
+            limit = len(self.display_channels) if self.current_tab == "Channels" else len(self.display_videos)
+            self.selected_idx = max(0, min(self.selected_idx, limit - 1))
+
             if self.state == State.BOOT:
                 self.state = State.BROWSE
             return
@@ -74,6 +82,8 @@ class AppState:
             self._handle_register(event, **kwargs)
         elif self.state == State.LOADING:
             self._handle_loading(event, **kwargs)
+        elif self.state == State.CONFIRM_DELETE:
+            self._handle_confirm_delete(event, **kwargs)
         elif self.state == State.ERROR:
             self._handle_error(event, **kwargs)
 
@@ -86,11 +96,14 @@ class AppState:
         elif event == Event.UPDATE or event == Event.HISTORY_UPDATE:
             self.previous_state = self.state
             self.state = State.UPDATING
-        elif event == Event.REGISTER:
+        elif event == Event.REGISTER_CHANNEL:
             self.previous_state = self.state
             self.state = State.REGISTER
+        elif event == Event.DELETE_CHANNEL:
+            if self.current_tab == "Channels" and self.display_channels:
+                self.state = State.CONFIRM_DELETE
         elif event == Event.TAB_NEXT or event == Event.TAB_PREV:
-            tabs = ["New", "Random", "Related"]
+            tabs = ["New", "Random", "Related", "Channels"]
             idx = tabs.index(self.current_tab)
             if event == Event.TAB_NEXT:
                 self.current_tab = tabs[(idx + 1) % len(tabs)]
@@ -159,6 +172,10 @@ class AppState:
         elif event == Event.REGISTRATION_FAILED:
             self.error_message = str(kwargs.get('error'))
             self.state = State.ERROR
+
+    def _handle_confirm_delete(self, event: Event, **kwargs: Any) -> None:
+        if event == Event.BACK_TO_UI:
+            self.state = State.BROWSE
 
     def _handle_error(self, event: Event, **kwargs: Any) -> None:
         if event == Event.BACK_TO_UI:
