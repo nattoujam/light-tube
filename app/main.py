@@ -28,9 +28,12 @@ class VideoPlayerApp:
     def initialize_data(self) -> None:
         # Use compat property 'videos' or just check if any record exists
         if not self.storage.get_new_videos(1):
-            self.storage.add_video(Video("1", "Big Buck Bunny", "Blender", datetime(2023, 1, 1), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"))
-            self.storage.add_video(Video("2", "Elephants Dream", "Blender", datetime(2023, 1, 2), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"))
-            self.storage.add_video(Video("3", "Tears of Steel", "Blender", datetime(2023, 1, 3), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"))
+            # Create a sample channel for the initial videos
+            channel_id = self.storage.save_channel("sample", "Sample Channel", "sample_ext_id")
+
+            self.storage.add_video(Video("1", "Big Buck Bunny", channel_id, datetime(2023, 1, 1), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", channel="Sample Channel", platform="sample"))
+            self.storage.add_video(Video("2", "Elephants Dream", channel_id, datetime(2023, 1, 2), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", channel="Sample Channel", platform="sample"))
+            self.storage.add_video(Video("3", "Tears of Steel", channel_id, datetime(2023, 1, 3), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4", channel="Sample Channel", platform="sample"))
 
     def mark_video_as_viewed(self, video: Optional[Video]) -> None:
         if video:

@@ -17,13 +17,13 @@ class Repository:
             video = Video(
                 id=f"{platform}:{rv.video_id}", # Unique ID for internal storage
                 title=rv.title,
-                channel=channel_name,
+                channel_id=channel_id,
                 upload_date=rv.published_at,
                 url=rv.watch_url,
-                platform=platform,
-                channel_id=channel_id,
                 video_id=rv.video_id,
-                created_at=datetime.now()
+                created_at=datetime.now(),
+                channel=channel_name,
+                platform=platform
             )
             # add_video uses INSERT OR IGNORE and returns the number of inserted rows (0 or 1)
             added_count += self.storage.add_video(video)
