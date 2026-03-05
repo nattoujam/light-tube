@@ -60,10 +60,7 @@ class AppState:
             self.display_channels = kwargs.get('channels', [])
             # Adjust selected_idx if it's out of bounds
             limit = len(self.display_channels) if self.current_tab == "Channels" else len(self.display_videos)
-            if self.selected_idx >= limit and limit > 0:
-                self.selected_idx = limit - 1
-            elif limit == 0:
-                self.selected_idx = 0
+            self.selected_idx = max(0, min(self.selected_idx, limit - 1))
 
             if self.state == State.BOOT:
                 self.state = State.BROWSE
