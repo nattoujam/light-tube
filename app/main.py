@@ -176,14 +176,24 @@ class VideoPlayerApp:
     def _run_registration_flow(self) -> None:
         self.ui.render(self.app_state)
         try:
-            platform_key = self.ui.get_input_string("  入力: ", self.ui.height // 2 - 2, self.ui.width // 2 - 20)
-            if not platform_key:
-                 self.app_state.handle_event(Event.BACK_TO_UI)
-                 return
+            # Step 1: Platform selection (Single key)
+            self.stdscr.nodelay(False)
+            key = self.stdscr.getch()
+            self.stdscr.nodelay(True)
+
+            if key == ord('b') or key == 27: # 'b' or ESC
+                self.app_state.handle_event(Event.BACK_TO_UI)
+                return
+
+            # For now, only 'y' (YouTube) is supported
+            if key != ord('y'):
+                self.app_state.handle_event(Event.BACK_TO_UI)
+                return
 
             platform_name = "youtube"
             self.ui.render(self.app_state)
 
+            # Step 2: Channel Name input
             channel_name = self.ui.get_input_string("  入力: ", self.ui.height // 2 + 1, self.ui.width // 2 - 20)
 
             if channel_name:

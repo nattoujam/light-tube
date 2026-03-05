@@ -248,11 +248,10 @@ class Tui:
         self.register_win.erase()
         self.register_win.box()
         self.register_win.addstr(1, 2, "チャンネル登録", curses.A_BOLD)
-        self.register_win.addstr(3, 2, "1. プラットフォームを選択 (y: YouTube)")
-        # Input for platform will be on line 4
+        self.register_win.addstr(3, 2, "1. プラットフォームを選択")
+        self.register_win.addstr(4, 5, "(y: YouTube)")
         self.register_win.addstr(6, 2, "2. チャンネル名(YT) を入力")
-        # Input for name will be on line 7
-        self.register_win.addstr(9, 2, "bキーでキャンセル")
+        self.register_win.addstr(9, 2, "bキーまたはEnter空押しでキャンセル")
 
         # エラーメッセージがあれば表示
         if state.error_message:
