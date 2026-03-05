@@ -13,8 +13,8 @@ class Event(Enum):
     CURSOR_UP = auto()
     CURSOR_DOWN = auto()
     HELP_TOGGLE = auto()
-    REGISTER = auto()
-    DELETE = auto()
+    REGISTER_CHANNEL = auto()
+    DELETE_CHANNEL = auto()
     HISTORY_UPDATE = auto()
     QUIT = auto()
 

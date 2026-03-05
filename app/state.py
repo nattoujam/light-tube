@@ -96,10 +96,10 @@ class AppState:
         elif event == Event.UPDATE or event == Event.HISTORY_UPDATE:
             self.previous_state = self.state
             self.state = State.UPDATING
-        elif event == Event.REGISTER:
+        elif event == Event.REGISTER_CHANNEL:
             self.previous_state = self.state
             self.state = State.REGISTER
-        elif event == Event.DELETE:
+        elif event == Event.DELETE_CHANNEL:
             if self.current_tab == "Channels" and self.display_channels:
                 self.state = State.CONFIRM_DELETE
         elif event == Event.TAB_NEXT or event == Event.TAB_PREV:

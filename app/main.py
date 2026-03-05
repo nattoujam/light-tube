@@ -56,9 +56,9 @@ class VideoPlayerApp:
         return None
 
     def refresh_app_state(self) -> None:
-        # Refresh display videos
+        # Refresh display videos and channels
         videos = self.get_display_videos()
-        channels = self.storage.get_channels() if self.app_state.current_tab == "Channels" else []
+        channels = self.storage.get_channels()
         self.app_state.handle_event(Event.CACHE_LOADED, videos=videos, channels=channels)
 
         # Update next video cache
@@ -270,14 +270,14 @@ class VideoPlayerApp:
         if self.app_state.current_tab != "Channels":
             return
         if self.app_state.state != State.REGISTER:
-            self.app_state.handle_event(Event.REGISTER)
+            self.app_state.handle_event(Event.REGISTER_CHANNEL)
             self.app_state.error_message = None
             self._run_registration_flow()
 
     def _on_key_delete(self) -> None:
         if self.app_state.current_tab != "Channels":
             return
-        self.app_state.handle_event(Event.DELETE)
+        self.app_state.handle_event(Event.DELETE_CHANNEL)
 
     def _on_key_random(self) -> None:
         self.app_state.handle_event(Event.RANDOM_REFRESH)
