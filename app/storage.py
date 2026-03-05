@@ -90,20 +90,8 @@ class VideoStorage:
         with self._connection() as conn:
             cursor = conn.execute("""
                 INSERT OR IGNORE INTO videos (id, title, channel, upload_date, url, viewed, started_at, channel_id, platform, video_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                video.id,
-                video.title,
-                video.channel,
-                video.upload_date.isoformat(),
-                video.url,
-                1 if video.viewed else 0,
-                video.started_at.isoformat() if video.started_at else None,
-                video.channel_id,
-                video.platform,
-                video.video_id,
-                video.created_at.isoformat() if video.created_at else None
-            ))
+                VALUES (:id, :title, :channel, :upload_date, :url, :viewed, :started_at, :channel_id, :platform, :video_id, :created_at)
+            """, video.to_dict())
             return cursor.rowcount
 
     def get_video_by_id(self, video_id: str) -> Optional[Video]:
@@ -116,21 +104,10 @@ class VideoStorage:
         with self._connection() as conn:
             conn.execute("""
                 UPDATE videos
-                SET title = ?, channel = ?, upload_date = ?, url = ?, viewed = ?, started_at = ?, channel_id = ?, platform = ?, video_id = ?, created_at = ?
-                WHERE id = ?
-            """, (
-                video.title,
-                video.channel,
-                video.upload_date.isoformat(),
-                video.url,
-                1 if video.viewed else 0,
-                video.started_at.isoformat() if video.started_at else None,
-                video.channel_id,
-                video.platform,
-                video.video_id,
-                video.created_at.isoformat() if video.created_at else None,
-                video.id
-            ))
+                SET title = :title, channel = :channel, upload_date = :upload_date, url = :url, viewed = :viewed,
+                    started_at = :started_at, channel_id = :channel_id, platform = :platform, video_id = :video_id, created_at = :created_at
+                WHERE id = :id
+            """, video.to_dict())
 
     def save_channel(self, platform: str, name: str, external_id: str) -> int:
         with self._connection() as conn:
