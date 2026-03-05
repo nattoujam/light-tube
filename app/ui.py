@@ -182,26 +182,37 @@ class Tui:
 
         self.footer_win.noutrefresh()
 
-    def draw_help(self):
-        if not self.help_win:
-            # Increased height to 16 to accommodate all items including border
-            self.help_win = curses.newwin(16, 40, self.height // 2 - 8, self.width // 2 - 20)
+    def draw_help(self, state: AppState):
+        items = [
+            "↑/↓, j/k: Move",
+            "Tab: Switch Tab",
+            "b: Back to UI",
+            "h: Toggle Help",
+            "q: Quit"
+        ]
+
+        if state.current_tab == "Channels":
+            items.insert(2, "a: Add Channel")
+            items.insert(3, "d: Delete Channel")
+            items.insert(4, "u: Update Channels")
+        else:
+            items.insert(2, "Enter: Play")
+            items.insert(3, "n: Next")
+            items.insert(4, "s: Stop")
+            items.insert(5, "u: Update Latest")
+            items.insert(6, "i: Update History")
+            if state.current_tab == "Random":
+                items.insert(7, "r: Random Refresh")
+
+        win_height = len(items) + 4
+        if not self.help_win or self.help_win.getmaxyx()[0] != win_height:
+            self.help_win = curses.newwin(win_height, 40, self.height // 2 - win_height // 2, self.width // 2 - 20)
+
         self.help_win.erase()
         self.help_win.box()
-        self.help_win.addstr(1, 2, "Keys:")
-        self.help_win.addstr(2, 2, "↑/↓, j/k: Move")
-        self.help_win.addstr(3, 2, "Enter: Play")
-        self.help_win.addstr(4, 2, "Tab: Switch Tab")
-        self.help_win.addstr(5, 2, "n: Next")
-        self.help_win.addstr(6, 2, "s: Stop")
-        self.help_win.addstr(7, 2, "u: Update Latest")
-        self.help_win.addstr(8, 2, "i: Update History")
-        self.help_win.addstr(9, 2, "a: Add Channel (Channel Tab only)")
-        self.help_win.addstr(10, 2, "d: Delete Channel (Channel Tab only)")
-        self.help_win.addstr(11, 2, "r: Random Refresh")
-        self.help_win.addstr(12, 2, "b: Back to UI")
-        self.help_win.addstr(13, 2, "h: Toggle Help")
-        self.help_win.addstr(14, 2, "q: Quit")
+        self.help_win.addstr(1, 2, f"Help: {state.current_tab}", curses.A_BOLD)
+        for i, item in enumerate(items):
+            self.help_win.addstr(2 + i, 2, item)
         self.help_win.noutrefresh()
 
     def render(self, state: AppState):
@@ -215,7 +226,7 @@ class Tui:
         elif state.state == State.ERROR:
             self.draw_error(state)
         if state.show_help:
-            self.draw_help()
+            self.draw_help(state)
         curses.doupdate()
 
     def draw_confirm_delete(self, state: AppState):
