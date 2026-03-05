@@ -139,7 +139,7 @@ class VideoPlayerApp:
             return channels[self.app_state.selected_idx]
         return None
 
-    def _sync_channel_videos(self, channel: Any, fetch_type: str = "recent", **kwargs: Any) -> int:
+    def _sync_channel_videos(self, channel: Channel, fetch_type: str = "recent", **kwargs: Any) -> int:
         """
         Fetch and save videos for a channel.
         fetch_type can be "recent" or "history".
