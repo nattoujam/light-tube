@@ -14,6 +14,7 @@ class Event(Enum):
     CURSOR_DOWN = auto()
     HELP_TOGGLE = auto()
     REGISTER = auto()
+    DELETE = auto()
     HISTORY_UPDATE = auto()
     QUIT = auto()
 

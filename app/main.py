@@ -263,13 +263,7 @@ class VideoPlayerApp:
     def _on_key_delete(self) -> None:
         if self.app_state.current_tab != "Channels":
             return
-        channel = self._get_selected_channel()
-        if channel:
-            self.storage.delete_channel(channel.id)
-            self.refresh_app_state()
-            # Adjust selection if necessary
-            if self.app_state.selected_idx >= len(self.app_state.display_channels) and self.app_state.selected_idx > 0:
-                self.app_state.selected_idx = len(self.app_state.display_channels) - 1
+        self.app_state.handle_event(Event.DELETE)
 
     def _on_key_random(self) -> None:
         self.app_state.handle_event(Event.RANDOM_REFRESH)
@@ -294,6 +288,20 @@ class VideoPlayerApp:
             return False
 
         key = keys[-1]
+
+        # Handle keys specifically for confirmation state
+        if self.app_state.state == State.CONFIRM_DELETE:
+            if key == ord('y'):
+                channel = self._get_selected_channel()
+                if channel:
+                    self.storage.delete_channel(channel.id)
+                    self.refresh_app_state()
+                self.app_state.handle_event(Event.BACK_TO_UI)
+                return True
+            elif key == ord('n') or key == ord('b'):
+                self.app_state.handle_event(Event.BACK_TO_UI)
+                return True
+            return True
 
         # Dispatcher map for key actions
         action_map = {

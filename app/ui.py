@@ -16,6 +16,7 @@ class Tui:
         self.main_win = curses.newwin(self.height - 6, self.width, 2, 0)
         self.footer_win = curses.newwin(4, self.width, self.height - 4, 0)
         self.register_win = curses.newwin(12, 60, self.height // 2 - 6, self.width // 2 - 30)
+        self.confirm_win = curses.newwin(8, 60, self.height // 2 - 4, self.width // 2 - 30)
         self.error_win = curses.newwin(10, 60, self.height // 2 - 5, self.width // 2 - 30)
         self.help_win = None
 
@@ -209,11 +210,28 @@ class Tui:
         self.draw_footer(state)
         if state.state == State.REGISTER:
             self.draw_register(state)
+        elif state.state == State.CONFIRM_DELETE:
+            self.draw_confirm_delete(state)
         elif state.state == State.ERROR:
             self.draw_error(state)
         if state.show_help:
             self.draw_help()
         curses.doupdate()
+
+    def draw_confirm_delete(self, state: AppState):
+        self.confirm_win.erase()
+        self.confirm_win.box()
+        self.confirm_win.addstr(1, 2, "チャンネル削除の確認", curses.A_BOLD)
+
+        channel = None
+        if 0 <= state.selected_idx < len(state.display_channels):
+            channel = state.display_channels[state.selected_idx]
+
+        name = channel.name if channel else "???"
+        self.confirm_win.addstr(3, 2, f"チャンネル 「{name}」 を削除しますか？")
+        self.confirm_win.addstr(4, 2, "紐付く動画データもすべて削除されます。")
+        self.confirm_win.addstr(6, 2, "y: 削除する  /  n: キャンセル", curses.A_REVERSE)
+        self.confirm_win.noutrefresh()
 
     def draw_register(self, state: AppState):
         self.register_win.erase()

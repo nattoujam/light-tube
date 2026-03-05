@@ -15,6 +15,7 @@ class State(Enum):
     UPDATING = auto()
     REGISTER = auto()
     LOADING = auto()
+    CONFIRM_DELETE = auto()
     ERROR = auto()
 
 @dataclass
@@ -57,6 +58,13 @@ class AppState:
         if event == Event.CACHE_LOADED:
             self.display_videos = kwargs.get('videos', [])
             self.display_channels = kwargs.get('channels', [])
+            # Adjust selected_idx if it's out of bounds
+            limit = len(self.display_channels) if self.current_tab == "Channels" else len(self.display_videos)
+            if self.selected_idx >= limit and limit > 0:
+                self.selected_idx = limit - 1
+            elif limit == 0:
+                self.selected_idx = 0
+
             if self.state == State.BOOT:
                 self.state = State.BROWSE
             return
@@ -92,6 +100,9 @@ class AppState:
         elif event == Event.REGISTER:
             self.previous_state = self.state
             self.state = State.REGISTER
+        elif event == Event.DELETE:
+            if self.current_tab == "Channels" and self.display_channels:
+                self.state = State.CONFIRM_DELETE
         elif event == Event.TAB_NEXT or event == Event.TAB_PREV:
             tabs = ["New", "Random", "Related", "Channels"]
             idx = tabs.index(self.current_tab)
