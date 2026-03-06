@@ -6,7 +6,7 @@ from app.models import Video
 
 @pytest.fixture
 def sample_video():
-    return Video("1", "Title", 1, datetime.now(), "http://example.com", channel="Channel")
+    return Video("1", "Title", "Channel", datetime.now(), "http://example.com")
 
 def test_boot_to_browse():
     state = AppState()

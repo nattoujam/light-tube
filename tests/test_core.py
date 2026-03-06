@@ -9,7 +9,7 @@ class TestCore(unittest.TestCase):
         video = Video(
             id="test-id",
             title="Test Title",
-            channel_id=1,
+            channel="Test Channel",
             upload_date=now,
             url="http://example.com/video"
         )

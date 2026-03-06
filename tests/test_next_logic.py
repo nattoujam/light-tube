@@ -10,17 +10,12 @@ def storage():
     if os.path.exists(db_path):
         os.remove(db_path)
     s = VideoStorage(db_path)
-
-    # Create test channels
-    ch_a_id = s.save_channel("plat", "ChA", "cha_ext")
-    ch_b_id = s.save_channel("plat", "ChB", "chb_ext")
-
     base_date = datetime(2023, 1, 1)
     v_list = [
-        Video("1", "V1", ch_a_id, base_date, "url1", channel="ChA"),
-        Video("2", "V2", ch_a_id, base_date + timedelta(days=1), "url2", channel="ChA"),
-        Video("3", "V3", ch_b_id, base_date + timedelta(days=2), "url3", channel="ChB"),
-        Video("4", "V4", ch_a_id, base_date - timedelta(days=1), "url4", viewed=True, channel="ChA"),
+        Video("1", "V1", "ChA", base_date, "url1"),
+        Video("2", "V2", "ChA", base_date + timedelta(days=1), "url2"),
+        Video("3", "V3", "ChB", base_date + timedelta(days=2), "url3"),
+        Video("4", "V4", "ChA", base_date - timedelta(days=1), "url4", viewed=True),
     ]
     for v in v_list:
         s.add_video(v)
