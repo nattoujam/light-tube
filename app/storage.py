@@ -62,11 +62,20 @@ class VideoStorage:
             url=row['url'],
             viewed=bool(row['viewed']),
             started_at=datetime.fromisoformat(row['started_at']) if row['started_at'] else None,
-            platform=row['platform'] if 'platform' in row.keys() else None,
-            channel_id=row['channel_id'] if 'channel_id' in row.keys() else None,
-            video_id=row['video_id'] if 'video_id' in row.keys() else None,
-            created_at=datetime.fromisoformat(row['created_at']) if 'created_at' in row.keys() and row['created_at'] else None
+            platform=row['platform'],
+            channel_id=row['channel_id'],
+            video_id=row['video_id'],
+            created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None
         )
+
+    def _query_videos(self, query: str, params: tuple = ()) -> List[Video]:
+        with self._connection() as conn:
+            cursor = conn.execute(query, params)
+            return [self._row_to_video(row) for row in cursor.fetchall()]
+
+    def _get_video(self, query: str, params: tuple = ()) -> Optional[Video]:
+        videos = self._query_videos(query, params)
+        return videos[0] if videos else None
 
     def _row_to_channel(self, row: sqlite3.Row) -> Channel:
         return Channel(
@@ -95,10 +104,7 @@ class VideoStorage:
             return cursor.rowcount
 
     def get_video_by_id(self, video_id: str) -> Optional[Video]:
-        with self._connection() as conn:
-            cursor = conn.execute("SELECT * FROM videos WHERE id = ?", (video_id,))
-            row = cursor.fetchone()
-            return self._row_to_video(row) if row else None
+        return self._get_video("SELECT * FROM videos WHERE id = ?", (video_id,))
 
     def update_video(self, video: Video) -> None:
         with self._connection() as conn:
@@ -156,32 +162,26 @@ class VideoStorage:
         return None
 
     def get_new_videos(self, limit: int = 100) -> List[Video]:
-        with self._connection() as conn:
-            cursor = conn.execute("SELECT * FROM videos ORDER BY upload_date DESC LIMIT ?", (limit,))
-            return [self._row_to_video(row) for row in cursor.fetchall()]
+        return self._query_videos("SELECT * FROM videos ORDER BY upload_date DESC LIMIT ?", (limit,))
 
     def get_random_videos(self, limit: int = 100) -> List[Video]:
-        with self._connection() as conn:
-            cursor = conn.execute("SELECT * FROM videos ORDER BY RANDOM() LIMIT ?", (limit,))
-            return [self._row_to_video(row) for row in cursor.fetchall()]
+        return self._query_videos("SELECT * FROM videos ORDER BY RANDOM() LIMIT ?", (limit,))
 
     def get_related_videos(self, target_id: str, limit: int = 100) -> List[Video]:
         target = self.get_video_by_id(target_id)
         if not target:
             return []
 
-        with self._connection() as conn:
-            # Related logic: Same channel, unviewed first, then by date proximity
-            # We use ABS(strftime('%s', upload_date) - strftime('%s', ?)) for date proximity
-            cursor = conn.execute("""
-                SELECT * FROM videos
-                WHERE channel = ? AND id != ?
-                ORDER BY viewed ASC, ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC
-                LIMIT ?
-            """, (target.channel, target.id, target.upload_date.isoformat(), limit))
-            return [self._row_to_video(row) for row in cursor.fetchall()]
+        # Related logic: Same channel, unviewed first, then by date proximity
+        # We use ABS(strftime('%s', upload_date) - strftime('%s', ?)) for date proximity
+        return self._query_videos("""
+            SELECT * FROM videos
+            WHERE channel = ? AND id != ?
+            ORDER BY viewed ASC, ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC
+            LIMIT ?
+        """, (target.channel, target.id, target.upload_date.isoformat(), limit))
 
-    def _find_related_unviewed(self, conn: sqlite3.Connection, current_video: Optional[Video], exclude_ids: List[str]) -> Optional[Video]:
+    def _find_related_unviewed(self, current_video: Optional[Video], exclude_ids: List[str]) -> Optional[Video]:
         if not current_video:
             return None
 
@@ -195,11 +195,9 @@ class VideoStorage:
         query += "ORDER BY ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC LIMIT 1"
         params.append(current_video.upload_date.isoformat())
 
-        cursor = conn.execute(query, params)
-        row = cursor.fetchone()
-        return self._row_to_video(row) if row else None
+        return self._get_video(query, tuple(params))
 
-    def _find_newest_unviewed(self, conn: sqlite3.Connection, exclude_ids: List[str]) -> Optional[Video]:
+    def _find_newest_unviewed(self, exclude_ids: List[str]) -> Optional[Video]:
         query = "SELECT * FROM videos WHERE viewed = 0 "
         params = []
         if exclude_ids:
@@ -208,11 +206,9 @@ class VideoStorage:
             params.extend(exclude_ids)
 
         query += "ORDER BY upload_date DESC LIMIT 1"
-        cursor = conn.execute(query, params)
-        row = cursor.fetchone()
-        return self._row_to_video(row) if row else None
+        return self._get_video(query, tuple(params))
 
-    def _find_related_viewed(self, conn: sqlite3.Connection, current_video: Optional[Video], exclude_ids: List[str]) -> Optional[Video]:
+    def _find_related_viewed(self, current_video: Optional[Video], exclude_ids: List[str]) -> Optional[Video]:
         if not current_video:
             return None
 
@@ -226,11 +222,9 @@ class VideoStorage:
         query += "ORDER BY ABS(strftime('%s', upload_date) - strftime('%s', ?)) ASC LIMIT 1"
         params.append(current_video.upload_date.isoformat())
 
-        cursor = conn.execute(query, params)
-        row = cursor.fetchone()
-        return self._row_to_video(row) if row else None
+        return self._get_video(query, tuple(params))
 
-    def _find_stable_fallback(self, conn: sqlite3.Connection, exclude_ids: List[str]) -> Optional[Video]:
+    def _find_stable_fallback(self, exclude_ids: List[str]) -> Optional[Video]:
         query = "SELECT * FROM videos "
         params = []
         if exclude_ids:
@@ -239,29 +233,26 @@ class VideoStorage:
             params.extend(exclude_ids)
 
         query += "ORDER BY title ASC, id ASC LIMIT 1"
-        cursor = conn.execute(query, params)
-        row = cursor.fetchone()
-        return self._row_to_video(row) if row else None
+        return self._get_video(query, tuple(params))
 
     def select_next_video(self, current_id: Optional[str] = None, last_id: Optional[str] = None) -> Optional[Video]:
         exclude_ids = [i for i in [current_id, last_id] if i]
         current_video = self.get_video_by_id(current_id) if current_id else None
 
-        with self._connection() as conn:
-            # Rule 1: Related Unviewed
-            video = self._find_related_unviewed(conn, current_video, exclude_ids)
-            if video:
-                return video
+        # Rule 1: Related Unviewed
+        video = self._find_related_unviewed(current_video, exclude_ids)
+        if video:
+            return video
 
-            # Rule 3: New tab unviewed (all unviewed, newest first)
-            video = self._find_newest_unviewed(conn, exclude_ids)
-            if video:
-                return video
+        # Rule 3: New tab unviewed (all unviewed, newest first)
+        video = self._find_newest_unviewed(exclude_ids)
+        if video:
+            return video
 
-            # Rule 4: Related Viewed
-            video = self._find_related_viewed(conn, current_video, exclude_ids)
-            if video:
-                return video
+        # Rule 4: Related Viewed
+        video = self._find_related_viewed(current_video, exclude_ids)
+        if video:
+            return video
 
-            # Rule 5: Stable Fallback
-            return self._find_stable_fallback(conn, exclude_ids)
+        # Rule 5: Stable Fallback
+        return self._find_stable_fallback(exclude_ids)
