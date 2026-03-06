@@ -53,9 +53,17 @@ class VideoStorage:
         finally:
             conn.close()
 
-    def _execute(self, query: str, params: tuple = ()) -> List[sqlite3.Row]:
+    def _fetch_all(self, query: str, params: tuple = ()) -> List[sqlite3.Row]:
         with self._connection() as conn:
             return conn.execute(query, params).fetchall()
+
+    def _fetch_one(self, query: str, params: tuple = ()) -> Optional[sqlite3.Row]:
+        with self._connection() as conn:
+            return conn.execute(query, params).fetchone()
+
+    def _run(self, query: str, params: tuple = ()) -> sqlite3.Cursor:
+        with self._connection() as conn:
+            return conn.execute(query, params)
 
     def _row_to_video(self, row: sqlite3.Row) -> Video:
         # Construct Channel object from row (JOIN query results)
@@ -99,24 +107,23 @@ class VideoStorage:
         pass
 
     def add_video(self, video: Video) -> int:
-        with self._connection() as conn:
-            cursor = conn.execute("""
-                INSERT OR IGNORE INTO videos (id, title, channel, upload_date, url, viewed, started_at, channel_id, platform, video_id, created_at)
-                VALUES (:id, :title, :channel, :upload_date, :url, :viewed, :started_at, :channel_id, :platform, :video_id, :created_at)
-            """, video.to_dict())
-            return cursor.rowcount
+        cursor = self._run("""
+            INSERT OR IGNORE INTO videos (id, title, channel, upload_date, url, viewed, started_at, channel_id, platform, video_id, created_at)
+            VALUES (:id, :title, :channel, :upload_date, :url, :viewed, :started_at, :channel_id, :platform, :video_id, :created_at)
+        """, video.to_dict())
+        return cursor.rowcount
 
     def get_video_by_id(self, video_id: str) -> Optional[Video]:
-        rows = self._execute("""
+        row = self._fetch_one("""
             SELECT v.*, c.external_id, c.created_at as channel_created_at
             FROM videos v
             JOIN channels c ON v.channel_id = c.id
             WHERE v.id = ?
         """, (video_id,))
-        return self._row_to_video(rows[0]) if rows else None
+        return self._row_to_video(row) if row else None
 
     def update_video(self, video: Video) -> None:
-        self._execute("""
+        self._run("""
             UPDATE videos
             SET title = :title, channel = :channel, upload_date = :upload_date, url = :url, viewed = :viewed,
                 started_at = :started_at, channel_id = :channel_id, platform = :platform, video_id = :video_id, created_at = :created_at
@@ -124,43 +131,42 @@ class VideoStorage:
         """, video.to_dict())
 
     def save_channel(self, platform: str, name: str, external_id: str) -> int:
-        with self._connection() as conn:
-            cursor = conn.execute("""
-                INSERT INTO channels (platform, name, external_id, created_at)
-                VALUES (?, ?, ?, ?)
-            """, (platform, name, external_id, datetime.now().isoformat()))
-            return cursor.lastrowid
+        cursor = self._run("""
+            INSERT INTO channels (platform, name, external_id, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (platform, name, external_id, datetime.now().isoformat()))
+        return cursor.lastrowid
 
     def get_channels(self) -> List[Channel]:
-        rows = self._execute("SELECT * FROM channels")
+        rows = self._fetch_all("SELECT * FROM channels")
         return [self._row_to_channel(row) for row in rows]
 
     def get_channel_by_external_id(self, platform: str, external_id: str) -> Optional[Channel]:
-        rows = self._execute("SELECT * FROM channels WHERE platform = ? AND external_id = ?", (platform, external_id))
-        return self._row_to_channel(rows[0]) if rows else None
+        row = self._fetch_one("SELECT * FROM channels WHERE platform = ? AND external_id = ?", (platform, external_id))
+        return self._row_to_channel(row) if row else None
 
     def get_channel_by_id(self, channel_id: int) -> Optional[Channel]:
-        rows = self._execute("SELECT * FROM channels WHERE id = ?", (channel_id,))
-        return self._row_to_channel(rows[0]) if rows else None
+        row = self._fetch_one("SELECT * FROM channels WHERE id = ?", (channel_id,))
+        return self._row_to_channel(row) if row else None
 
     def delete_channel(self, channel_id: int) -> None:
-        self._execute("DELETE FROM videos WHERE channel_id = ?", (channel_id,))
-        self._execute("DELETE FROM channels WHERE id = ?", (channel_id,))
+        self._run("DELETE FROM videos WHERE channel_id = ?", (channel_id,))
+        self._run("DELETE FROM channels WHERE id = ?", (channel_id,))
 
     def get_latest_video_date(self, channel_id: int) -> Optional[datetime]:
-        rows = self._execute("SELECT MAX(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))
-        if rows and rows[0][0]:
-            return datetime.fromisoformat(rows[0][0])
+        row = self._fetch_one("SELECT MAX(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))
+        if row and row[0]:
+            return datetime.fromisoformat(row[0])
         return None
 
     def get_oldest_video_date(self, channel_id: int) -> Optional[datetime]:
-        rows = self._execute("SELECT MIN(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))
-        if rows and rows[0][0]:
-            return datetime.fromisoformat(rows[0][0])
+        row = self._fetch_one("SELECT MIN(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))
+        if row and row[0]:
+            return datetime.fromisoformat(row[0])
         return None
 
     def get_new_videos(self, limit: int = 100) -> List[Video]:
-        rows = self._execute("""
+        rows = self._fetch_all("""
             SELECT v.*, c.external_id, c.created_at as channel_created_at
             FROM videos v
             JOIN channels c ON v.channel_id = c.id
@@ -169,7 +175,7 @@ class VideoStorage:
         return [self._row_to_video(row) for row in rows]
 
     def get_random_videos(self, limit: int = 100) -> List[Video]:
-        rows = self._execute("""
+        rows = self._fetch_all("""
             SELECT v.*, c.external_id, c.created_at as channel_created_at
             FROM videos v
             JOIN channels c ON v.channel_id = c.id
@@ -182,7 +188,7 @@ class VideoStorage:
         if not target:
             return []
 
-        rows = self._execute("""
+        rows = self._fetch_all("""
             SELECT v.*, c.external_id, c.created_at as channel_created_at
             FROM videos v
             JOIN channels c ON v.channel_id = c.id
@@ -211,8 +217,8 @@ class VideoStorage:
         query += "ORDER BY ABS(strftime('%s', v.upload_date) - strftime('%s', ?)) ASC LIMIT 1"
         params.append(current_video.upload_date.isoformat())
 
-        rows = self._execute(query, tuple(params))
-        return self._row_to_video(rows[0]) if rows else None
+        row = self._fetch_one(query, tuple(params))
+        return self._row_to_video(row) if row else None
 
     def _find_newest_unviewed(self, exclude_ids: List[str]) -> Optional[Video]:
         query = """
@@ -228,8 +234,8 @@ class VideoStorage:
             params.extend(exclude_ids)
 
         query += "ORDER BY v.upload_date DESC LIMIT 1"
-        rows = self._execute(query, tuple(params))
-        return self._row_to_video(rows[0]) if rows else None
+        row = self._fetch_one(query, tuple(params))
+        return self._row_to_video(row) if row else None
 
     def _find_related_viewed(self, current_video: Optional[Video], exclude_ids: List[str]) -> Optional[Video]:
         if not current_video:
@@ -250,8 +256,8 @@ class VideoStorage:
         query += "ORDER BY ABS(strftime('%s', v.upload_date) - strftime('%s', ?)) ASC LIMIT 1"
         params.append(current_video.upload_date.isoformat())
 
-        rows = self._execute(query, tuple(params))
-        return self._row_to_video(rows[0]) if rows else None
+        row = self._fetch_one(query, tuple(params))
+        return self._row_to_video(row) if row else None
 
     def _find_stable_fallback(self, exclude_ids: List[str]) -> Optional[Video]:
         query = """
@@ -266,8 +272,8 @@ class VideoStorage:
             params.extend(exclude_ids)
 
         query += "ORDER BY v.title ASC, v.id ASC LIMIT 1"
-        rows = self._execute(query, tuple(params))
-        return self._row_to_video(rows[0]) if rows else None
+        row = self._fetch_one(query, tuple(params))
+        return self._row_to_video(row) if row else None
 
     def select_next_video(self, current_id: Optional[str] = None, last_id: Optional[str] = None) -> Optional[Video]:
         exclude_ids = [i for i in [current_id, last_id] if i]
