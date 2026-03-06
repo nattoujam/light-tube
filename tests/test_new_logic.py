@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from datetime import datetime
 from core.platform.youtube import YouTube
 from core.repository import Repository
-from app.models import Video
+from app.models import Video, Channel
 
 @patch("requests.get")
 def test_platform_a_fetch_videos(mock_get):
@@ -54,12 +54,14 @@ def test_repository_save_remote_videos():
     mock_storage.add_video.return_value = 1
     repo = Repository(mock_storage)
 
+    channel = Channel(id=1, platform="youtube", name="Channel A", external_id="ext1", created_at=datetime.now())
+
     from core.platform.base import RemoteVideo
     rvs = [
         RemoteVideo(video_id="vid1", title="Title 1", published_at=datetime(2023, 1, 1), watch_url="url1")
     ]
 
-    added = repo.save_remote_videos(1, "youtube", "Channel A", rvs)
+    added = repo.save_remote_videos(channel, rvs)
 
     assert added == 1
     assert mock_storage.add_video.called
@@ -67,3 +69,4 @@ def test_repository_save_remote_videos():
     assert video.video_id == "vid1"
     assert video.platform == "youtube"
     assert video.channel_id == 1
+    assert video.channel == channel

@@ -115,7 +115,7 @@ class Tui:
 
         # Calculate max title length to avoid overflow
         # Space for prefix(2), viewed_mark(4), space(1), channel(varies), parens(2)
-        channel_info = f"({video.channel})"
+        channel_info = f"({video.channel.name})"
         available_width = self.width - 10 - len(channel_info)
         title = self._truncate_with_width(video.title, available_width)
         line = f"{prefix} {viewed_mark} {title} {channel_info}"

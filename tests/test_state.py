@@ -2,11 +2,12 @@ import pytest
 from datetime import datetime
 from app.state import AppState, State
 from app.events import Event
-from app.models import Video
+from app.models import Video, Channel
 
 @pytest.fixture
 def sample_video():
-    return Video("1", "Title", 1, datetime.now(), "http://example.com", channel="Channel")
+    channel = Channel(1, "youtube", "Channel", "ext_id", datetime.now())
+    return Video("1", "Title", channel, datetime.now(), "http://example.com", "youtube", 1)
 
 def test_boot_to_browse():
     state = AppState()
