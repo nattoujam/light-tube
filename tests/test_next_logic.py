@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime, timedelta
-from app.models import Video
+from app.models import Video, Channel
 from app.storage import VideoStorage
 import os
 
@@ -11,11 +11,18 @@ def storage():
         os.remove(db_path)
     s = VideoStorage(db_path)
     base_date = datetime(2023, 1, 1)
+
+    # Create channels first for referential integrity and Video requirements
+    cha_id = s.save_channel("youtube", "ChA", "cha_ext")
+    chb_id = s.save_channel("youtube", "ChB", "chb_ext")
+    cha = Channel(cha_id, "youtube", "ChA", "cha_ext", base_date)
+    chb = Channel(chb_id, "youtube", "ChB", "chb_ext", base_date)
+
     v_list = [
-        Video("1", "V1", "ChA", base_date, "url1"),
-        Video("2", "V2", "ChA", base_date + timedelta(days=1), "url2"),
-        Video("3", "V3", "ChB", base_date + timedelta(days=2), "url3"),
-        Video("4", "V4", "ChA", base_date - timedelta(days=1), "url4", viewed=True),
+        Video("1", "V1", cha, base_date, "url1", "youtube", cha_id),
+        Video("2", "V2", cha, base_date + timedelta(days=1), "url2", "youtube", cha_id),
+        Video("3", "V3", chb, base_date + timedelta(days=2), "url3", "youtube", chb_id),
+        Video("4", "V4", cha, base_date - timedelta(days=1), "url4", "youtube", cha_id, viewed=True),
     ]
     for v in v_list:
         s.add_video(v)

@@ -11,17 +11,17 @@ class Repository:
     def save_channel(self, platform: str, name: str, external_id: str) -> int:
         return self.storage.save_channel(platform, name, external_id)
 
-    def save_remote_videos(self, channel_id: int, platform: str, channel_name: str, remote_videos: List[RemoteVideo]):
+    def save_remote_videos(self, channel: Channel, remote_videos: List[RemoteVideo]):
         added_count = 0
         for rv in remote_videos:
             video = Video(
-                id=f"{platform}:{rv.video_id}", # Unique ID for internal storage
+                id=f"{channel.platform}:{rv.video_id}", # Unique ID for internal storage
                 title=rv.title,
-                channel=channel_name,
+                channel=channel,
                 upload_date=rv.published_at,
                 url=rv.watch_url,
-                platform=platform,
-                channel_id=channel_id,
+                platform=channel.platform,
+                channel_id=channel.id,
                 video_id=rv.video_id,
                 created_at=datetime.now()
             )

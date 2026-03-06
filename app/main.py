@@ -28,9 +28,13 @@ class VideoPlayerApp:
     def initialize_data(self) -> None:
         # Use compat property 'videos' or just check if any record exists
         if not self.storage.get_new_videos(1):
-            self.storage.add_video(Video("1", "Big Buck Bunny", "Blender", datetime(2023, 1, 1), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"))
-            self.storage.add_video(Video("2", "Elephants Dream", "Blender", datetime(2023, 1, 2), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"))
-            self.storage.add_video(Video("3", "Tears of Steel", "Blender", datetime(2023, 1, 3), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"))
+            # Create a dummy channel for initial data
+            channel_id = self.storage.save_channel("sample", "Blender", "blender_id")
+            channel = Channel(id=channel_id, platform="sample", name="Blender", external_id="blender_id", created_at=datetime.now())
+
+            self.storage.add_video(Video("1", "Big Buck Bunny", channel, datetime(2023, 1, 1), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", platform="sample", channel_id=channel_id))
+            self.storage.add_video(Video("2", "Elephants Dream", channel, datetime(2023, 1, 2), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", platform="sample", channel_id=channel_id))
+            self.storage.add_video(Video("3", "Tears of Steel", channel, datetime(2023, 1, 3), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4", platform="sample", channel_id=channel_id))
 
     def mark_video_as_viewed(self, video: Optional[Video]) -> None:
         if video:
@@ -153,7 +157,7 @@ class VideoPlayerApp:
         else:
             return 0
 
-        return self.repository.save_remote_videos(channel.id, channel.platform, channel.name, rvs)
+        return self.repository.save_remote_videos(channel, rvs)
 
     def _handle_history_update(self, video: Video) -> None:
         if not video.channel_id:

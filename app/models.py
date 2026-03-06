@@ -3,16 +3,24 @@ from datetime import datetime
 from typing import Optional
 
 @dataclass
+class Channel:
+    id: Optional[int]
+    platform: str
+    name: str
+    external_id: str
+    created_at: datetime
+
+@dataclass
 class Video:
     id: str # Internal ID (or video_id for backward compatibility)
     title: str
-    channel: str
+    channel: Channel
     upload_date: datetime
     url: str
+    platform: str
+    channel_id: int
     viewed: bool = False
     started_at: Optional[datetime] = None
-    platform: Optional[str] = None
-    channel_id: Optional[int] = None
     video_id: Optional[str] = None
     created_at: Optional[datetime] = None
 
@@ -20,7 +28,7 @@ class Video:
         return {
             "id": self.id,
             "title": self.title,
-            "channel": self.channel,
+            "channel": self.channel.name,
             "upload_date": self.upload_date.isoformat(),
             "url": self.url,
             "viewed": 1 if self.viewed else 0,
@@ -30,11 +38,3 @@ class Video:
             "video_id": self.video_id,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
-
-@dataclass
-class Channel:
-    id: Optional[int]
-    platform: str
-    name: str
-    external_id: str
-    created_at: datetime
