@@ -154,15 +154,15 @@ class VideoStorage:
         self._run("DELETE FROM channels WHERE id = ?", (channel_id,))
 
     def get_latest_video_date(self, channel_id: int) -> Optional[datetime]:
-        row = self._fetch_one("SELECT MAX(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))
-        if row and row[0]:
-            return datetime.fromisoformat(row[0])
+        row = self._fetch_one("SELECT MAX(upload_date) AS val FROM videos WHERE channel_id = ?", (channel_id,))
+        if row and row['val']:
+            return datetime.fromisoformat(row['val'])
         return None
 
     def get_oldest_video_date(self, channel_id: int) -> Optional[datetime]:
-        row = self._fetch_one("SELECT MIN(upload_date) FROM videos WHERE channel_id = ?", (channel_id,))
-        if row and row[0]:
-            return datetime.fromisoformat(row[0])
+        row = self._fetch_one("SELECT MIN(upload_date) AS val FROM videos WHERE channel_id = ?", (channel_id,))
+        if row and row['val']:
+            return datetime.fromisoformat(row['val'])
         return None
 
     def get_new_videos(self, limit: int = 100) -> List[Video]:
