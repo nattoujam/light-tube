@@ -292,39 +292,49 @@ class VideoPlayerApp:
         self.refresh_app_state()
 
     def handle_input(self) -> bool:
-        try:
-            key = self.stdscr.get_wch()
-        except:
+        keys = []
+        while True:
+            try:
+                # Draining input buffer
+                k = self.stdscr.get_wch()
+                keys.append(k)
+            except:
+                break
+
+        if not keys:
             return True
+
+        # Handle REGISTER state (Modal) - process ALL keys to avoid missing chars
+        if self.app_state.state == State.REGISTER:
+            for key in keys:
+                if key == "\x1b": # ESC
+                    self.app_state.handle_event(Event.BACK_TO_UI)
+                    return True
+
+                if self.app_state.registration_step == 0: # Platform selection
+                    if key == "y":
+                        self.app_state.registration_platform = "youtube"
+                        self.app_state.registration_step = 1
+                else: # Channel name input
+                    if key == "\n" or key == "\r" or key == curses.KEY_ENTER:
+                        if self.app_state.registration_buffer:
+                            self._submit_registration()
+                        else:
+                            self.app_state.handle_event(Event.BACK_TO_UI)
+                    elif key == curses.KEY_BACKSPACE or key == "\x7f" or key == "\x08":
+                        if len(self.app_state.registration_buffer) > 0:
+                            self.app_state.registration_buffer = self.app_state.registration_buffer[:-1]
+                    elif isinstance(key, str):
+                        if len(self.app_state.registration_buffer) < 50:
+                            self.app_state.registration_buffer += key
+            return True
+
+        # For non-modal states, only process the LAST key to prevent "slippery" cursor
+        key = keys[-1]
 
         if key == 'q':
             self.player.stop()
             return False
-
-        # Handle REGISTER state (Modal)
-        if self.app_state.state == State.REGISTER:
-            if key == "\x1b": # ESC
-                self.app_state.handle_event(Event.BACK_TO_UI)
-                return True
-
-            if self.app_state.registration_step == 0: # Platform selection
-                if key == "y":
-                    self.app_state.registration_platform = "youtube"
-                    self.app_state.registration_step = 1
-                return True
-            else: # Channel name input
-                if key == "\n" or key == "\r" or key == curses.KEY_ENTER:
-                    if self.app_state.registration_buffer:
-                        self._submit_registration()
-                    else:
-                        self.app_state.handle_event(Event.BACK_TO_UI)
-                elif key == curses.KEY_BACKSPACE or key == "\x7f" or key == "\x08":
-                    if len(self.app_state.registration_buffer) > 0:
-                        self.app_state.registration_buffer = self.app_state.registration_buffer[:-1]
-                elif isinstance(key, str):
-                    if len(self.app_state.registration_buffer) < 50:
-                        self.app_state.registration_buffer += key
-                return True
 
         # Handle CONFIRM_DELETE state
         if self.app_state.state == State.CONFIRM_DELETE:
