@@ -330,7 +330,7 @@ class Tui:
         self.register_win.noutrefresh()
 
     def get_input_string(self, win, prompt: str, y: int, x: int) -> str:
-        curses.echo()
+        curses.noecho()
         curses.curs_set(1)
         self.stdscr.nodelay(False)
 
@@ -342,23 +342,41 @@ class Tui:
         # Visual underline/input field area
         _, w = win.getmaxyx()
         input_area_width = w - x - prompt_width - 4
-        win.addstr(y, x + prompt_width, "_" * input_area_width, curses.A_DIM)
-        win.refresh()
 
-        try:
-            # Move cursor back to start of underline
-            curses.setsyx(win.getbegy() + y, win.getbegx() + x + prompt_width)
-            curses.doupdate()
+        input_str = ""
+        while True:
+            # Redraw input area
+            win.addstr(y, x + prompt_width, "_" * input_area_width, curses.A_DIM)
+            display_input = self._truncate_with_width(input_str, input_area_width)
+            win.addstr(y, x + prompt_width, display_input)
 
-            # Use win.getstr to get input
-            input_bytes = win.getstr(y, x + prompt_width, input_area_width)
-            input_str = input_bytes.decode('utf-8')
-        except:
-            input_str = ""
+            # Position cursor
+            cursor_pos = self._get_display_width(display_input)
+            win.move(y, x + prompt_width + cursor_pos)
+            win.refresh()
+
+            ch = win.getch()
+
+            if ch in (10, 13, curses.KEY_ENTER): # Enter
+                break
+            elif ch == 27: # Esc
+                input_str = ""
+                break
+            elif ch in (curses.KEY_BACKSPACE, 127, 8): # Backspace
+                if len(input_str) > 0:
+                    input_str = input_str[:-1]
+            elif 32 <= ch <= 126: # Regular ASCII
+                if len(input_str) < 50:
+                    input_str += chr(ch)
+            elif ch > 127: # Potential Multi-byte (simplified)
+                try:
+                    # Very basic handling for non-ASCII (single char only)
+                    input_str += chr(ch)
+                except:
+                    pass
 
         self.stdscr.nodelay(True)
         curses.curs_set(0)
-        curses.noecho()
         return input_str
 
     def draw_loading(self, state: AppState):
