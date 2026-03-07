@@ -12,6 +12,8 @@ class Event(Enum):
     TAB_PREV = auto()
     CURSOR_UP = auto()
     CURSOR_DOWN = auto()
+    CURSOR_LEFT = auto()
+    CURSOR_RIGHT = auto()
     HELP_TOGGLE = auto()
     REGISTER_CHANNEL = auto()
     DELETE_CHANNEL = auto()

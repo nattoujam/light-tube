@@ -50,7 +50,8 @@ def test_updating_flow():
     assert "+5件" in state.update_status
 
 def test_ui_state_events(sample_video):
-    state = AppState(state=State.BROWSE, display_videos=[sample_video, sample_video])
+    from app.state import FocusArea
+    state = AppState(state=State.BROWSE, display_videos=[sample_video, sample_video], focus_area=FocusArea.MAIN)
 
     # Help toggle
     assert not state.show_help
@@ -70,8 +71,10 @@ def test_ui_state_events(sample_video):
     state.handle_event(Event.CURSOR_UP) # Boundary check
     assert state.selected_idx == 0
 
-def test_tab_reset_index(sample_video):
-    state = AppState(state=State.BROWSE, current_tab="New", display_videos=[sample_video, sample_video], selected_idx=1)
+def test_area_switch():
+    from app.state import FocusArea
+    state = AppState(state=State.BROWSE, focus_area=FocusArea.SIDEBAR)
     state.handle_event(Event.TAB_NEXT)
-    assert state.current_tab == "Random"
-    assert state.selected_idx == 0
+    assert state.focus_area == FocusArea.MAIN
+    state.handle_event(Event.TAB_NEXT)
+    assert state.focus_area == FocusArea.SIDEBAR

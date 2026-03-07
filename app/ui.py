@@ -5,20 +5,44 @@ from .state import AppState, State
 from .models import Video, Channel
 
 class Tui:
+    # Color Pair IDs
+    COLOR_DEFAULT = 0
+    COLOR_HIGHLIGHT = 1  # Magenta
+    COLOR_BORDER = 2
+    COLOR_HEADER = 3
+
+    SIDEBAR_WIDTH = 25
+
     def __init__(self, stdscr):
         self.stdscr = stdscr
         curses.curs_set(0)
+        self._init_colors()
         self.height, self.width = stdscr.getmaxyx()
         self.scroll_offset = 0
+        self.sidebar_scroll_offset = 0
 
         # Initialize windows once to avoid memory leaks
         self.header_win = curses.newwin(2, self.width, 0, 0)
-        self.main_win = curses.newwin(self.height - 6, self.width, 2, 0)
+        self.sidebar_win = curses.newwin(self.height - 6, self.SIDEBAR_WIDTH, 2, 0)
+        self.main_win = curses.newwin(self.height - 6, self.width - self.SIDEBAR_WIDTH, 2, self.SIDEBAR_WIDTH)
         self.footer_win = curses.newwin(4, self.width, self.height - 4, 0)
+
         self.register_win = curses.newwin(12, 60, self.height // 2 - 6, self.width // 2 - 30)
         self.confirm_win = curses.newwin(8, 60, self.height // 2 - 4, self.width // 2 - 30)
         self.error_win = curses.newwin(10, 60, self.height // 2 - 5, self.width // 2 - 30)
+        self.loading_win = curses.newwin(5, 40, self.height // 2 - 2, self.width // 2 - 20)
         self.help_win = None
+
+    def _init_colors(self):
+        if curses.has_colors():
+            curses.start_color()
+            curses.use_default_colors()
+            # Magenta foreground, default background
+            curses.init_pair(self.COLOR_HIGHLIGHT, curses.COLOR_MAGENTA, -1)
+            # Border/Dim color
+            curses.init_pair(self.COLOR_BORDER, curses.COLOR_CYAN, -1)
+            # Header color
+            curses.init_pair(self.COLOR_HEADER, curses.COLOR_BLACK, curses.COLOR_WHITE)
 
     def draw_header(self, state: AppState):
         self.header_win.erase()
@@ -63,63 +87,108 @@ class Tui:
         elif selected_idx >= self.scroll_offset + main_height:
             self.scroll_offset = selected_idx - main_height + 1
 
+    def _draw_scrollbar(self, win, current_idx: int, total_items: int):
+        h, w = win.getmaxyx()
+        if total_items <= h:
+            return
+
+        bar_height = max(1, int(h * h / total_items))
+        bar_pos = int(h * current_idx / total_items)
+
+        for i in range(h):
+            char = "┃" if bar_pos <= i < bar_pos + bar_height else "│"
+            try:
+                win.attron(curses.color_pair(self.COLOR_BORDER))
+                win.addstr(i, w - 1, char)
+                win.attroff(curses.color_pair(self.COLOR_BORDER))
+            except curses.error:
+                pass
+
+    def draw_sidebar(self, state: AppState):
+        from .state import FocusArea
+        self.sidebar_win.erase()
+        h, w = self.sidebar_win.getmaxyx()
+
+        items = ["All Videos"] + [c.name for c in state.display_channels]
+        total_items = len(items)
+
+        if state.focus_area == FocusArea.SIDEBAR:
+            if state.sidebar_idx < self.sidebar_scroll_offset:
+                self.sidebar_scroll_offset = state.sidebar_idx
+            elif state.sidebar_idx >= self.sidebar_scroll_offset + h:
+                self.sidebar_scroll_offset = state.sidebar_idx - h + 1
+
+        for i in range(h):
+            idx = i + self.sidebar_scroll_offset
+            if idx >= total_items:
+                break
+
+            name = items[idx]
+            display_name = self._truncate_with_width(name, w - 2)
+
+            attr = curses.A_NORMAL
+            if idx == state.sidebar_idx:
+                if state.focus_area == FocusArea.SIDEBAR:
+                    attr = curses.color_pair(self.COLOR_HIGHLIGHT) | curses.A_BOLD
+                else:
+                    attr = curses.A_UNDERLINE
+
+            try:
+                self.sidebar_win.addstr(i, 1, display_name, attr)
+            except curses.error:
+                pass
+
+        self._draw_scrollbar(self.sidebar_win, state.sidebar_idx, total_items)
+        # Vertical divider
+        for i in range(h):
+            try:
+                self.sidebar_win.attron(curses.color_pair(self.COLOR_BORDER))
+                self.sidebar_win.addstr(i, w - 2, "│")
+                self.sidebar_win.attroff(curses.color_pair(self.COLOR_BORDER))
+            except curses.error:
+                pass
+        self.sidebar_win.noutrefresh()
+
     def draw_main_area(self, state: AppState):
+        from .state import FocusArea
         self.main_win.erase()
-        main_height, _ = self.main_win.getmaxyx()
+        main_height, main_width = self.main_win.getmaxyx()
 
-        if state.current_tab == "Channels":
-            channels = state.display_channels
-            if not channels:
-                self.main_win.addstr(1, 2, "No channels registered.")
-            else:
-                self._adjust_scroll(state.selected_idx, main_height)
-                for i in range(main_height):
-                    idx = i + self.scroll_offset
-                    if idx >= len(channels):
-                        break
-                    self._draw_channel_line(i, idx, channels[idx], state.selected_idx)
+        videos = state.display_videos
+        if not videos:
+            self.main_win.addstr(1, 2, "No videos found.")
         else:
-            videos = state.get_filtered_videos()
-            if not videos:
-                self.main_win.addstr(1, 2, "No videos found.")
-            else:
-                self._adjust_scroll(state.selected_idx, main_height)
-                for i in range(main_height):
-                    idx = i + self.scroll_offset
-                    if idx >= len(videos):
-                        break
-                    self._draw_video_line(i, idx, videos[idx], state.selected_idx)
+            self._adjust_scroll(state.selected_idx, main_height)
+            for i in range(main_height):
+                idx = i + self.scroll_offset
+                if idx >= len(videos):
+                    break
 
+                video = videos[idx]
+                is_selected = (idx == state.selected_idx and state.focus_area == FocusArea.MAIN)
+
+                # Render video line
+                viewed_mark = "●" if not video.viewed else " "
+                channel_info = f" {video.channel.name}"
+
+                attr = curses.A_NORMAL
+                if is_selected:
+                    attr = curses.color_pair(self.COLOR_HIGHLIGHT) | curses.A_BOLD
+
+                title_width = main_width - 15 - self._get_display_width(channel_info)
+                title = self._truncate_with_width(video.title, title_width)
+
+                line = f" {viewed_mark} {title}"
+                try:
+                    self.main_win.addstr(i, 0, line, attr)
+                    # Align channel info to the right
+                    chan_x = main_width - self._get_display_width(channel_info) - 2
+                    self.main_win.addstr(i, chan_x, channel_info, curses.A_DIM)
+                except curses.error:
+                    pass
+
+        self._draw_scrollbar(self.main_win, state.selected_idx, len(videos))
         self.main_win.noutrefresh()
-
-    def _draw_line(self, y: int, idx: int, line: str, selected_idx: int) -> None:
-        """Helper to draw a line with selection highlight and error handling."""
-        display_line = self._truncate_with_width(line, self.width - 2)
-        try:
-            if idx == selected_idx:
-                self.main_win.attron(curses.A_REVERSE)
-                padded_line = self._pad_with_width(display_line, self.width - 2)
-                self.main_win.addstr(y, 0, padded_line)
-                self.main_win.attroff(curses.A_REVERSE)
-            else:
-                self.main_win.addstr(y, 0, display_line)
-        except curses.error:
-            pass
-
-    def _draw_channel_line(self, y: int, idx: int, channel: Channel, selected_idx: int) -> None:
-        prefix = ">" if idx == selected_idx else " "
-        line = f"{prefix} {channel.name} ({channel.platform})"
-        self._draw_line(y, idx, line, selected_idx)
-
-    def _draw_video_line(self, y: int, idx: int, video: Video, selected_idx: int) -> None:
-        prefix = ">" if idx == selected_idx else " "
-        viewed_mark = "[v]" if video.viewed else "[ ]"
-
-        channel_info = f"({video.channel.name})"
-        available_width = self.width - 10 - len(channel_info)
-        title = self._truncate_with_width(video.title, available_width)
-        line = f"{prefix} {viewed_mark} {title} {channel_info}"
-        self._draw_line(y, idx, line, selected_idx)
 
     def _get_status_text(self, state: AppState) -> str:
         status_text = "▶ Ready"
@@ -142,41 +211,40 @@ class Tui:
         self.footer_win.erase()
         self.footer_win.box()
 
-        # 1行目: 再生ステータスとタイトル
+        # Row 1: Playback status
         status_text = self._get_status_text(state)
-
-        # ウィンドウ幅（全角考慮）に合わせて切り捨て
         display_line1 = self._truncate_with_width(status_text, self.width - 6)
         self.footer_win.addstr(1, 2, display_line1)
 
-        # 2行目: 次の動画と操作ガイド
-        if state.current_tab == "Channels":
-            guide_text = "[d:Delete] [a:Add] [b:Back] [u:Update] [h:Help]"
+        # Row 2: Guide
+        from .state import FocusArea
+        if state.focus_area == FocusArea.SIDEBAR:
+            guide_text = "[Enter:Select] [a:Add] [d:Delete] [u:Update] [?:Help]"
         else:
-            guide_text = "[n:Next] [s:Stop] [b:Back] [u:Update] [i:History] [h:Help]"
+            guide_text = "[Enter:Play] [n:Next] [s:Stop] [u:Update] [i:History] [?:Help]"
+
+        self.footer_win.addstr(2, 2, guide_text)
 
         next_video = state.next_video
         if next_video:
-            # Reserve space for guide_text at the right
             max_next_len = self.width - len(guide_text) - 10
             next_text = f"Next: {self._truncate_with_width(next_video.title, max_next_len)}"
-            self.footer_win.addstr(2, 2, next_text)
-            self.footer_win.addstr(2, self.width - len(guide_text) - 2, guide_text)
-        else:
-            self.footer_win.addstr(2, 2, guide_text)
+            self.footer_win.addstr(2, self.width - self._get_display_width(next_text) - 2, next_text, curses.A_DIM)
 
         self.footer_win.noutrefresh()
 
     def draw_help(self, state: AppState):
         items = [
             "↑/↓, j/k: Move",
-            "Tab: Switch Tab",
+            "←/→, h/l: Sidebar/Main",
+            "Tab: Switch Area",
             "b: Back to UI",
-            "h: Toggle Help",
+            "?: Toggle Help",
             "q: Quit"
         ]
 
-        if state.current_tab == "Channels":
+        from .state import FocusArea
+        if state.focus_area == FocusArea.SIDEBAR:
             items.insert(2, "a: Add Channel")
             items.insert(3, "d: Delete Channel")
             items.insert(4, "u: Update Channels")
@@ -186,8 +254,6 @@ class Tui:
             items.insert(4, "s: Stop")
             items.insert(5, "u: Update Latest")
             items.insert(6, "i: Update History")
-            if state.current_tab == "Random":
-                items.insert(7, "r: Random Refresh")
 
         win_height = len(items) + 4
         if not self.help_win or self.help_win.getmaxyx()[0] != win_height:
@@ -202,8 +268,11 @@ class Tui:
 
     def render(self, state: AppState):
         self.draw_header(state)
+        self.draw_sidebar(state)
         self.draw_main_area(state)
         self.draw_footer(state)
+        if state.state == State.UPDATING or state.state == State.LOADING:
+            self.draw_loading(state)
         if state.state == State.REGISTER:
             self.draw_register(state)
         elif state.state == State.CONFIRM_DELETE:
@@ -244,12 +313,30 @@ class Tui:
 
         self.register_win.noutrefresh()
 
+    def draw_loading(self, state: AppState):
+        self.loading_win.erase()
+        self.loading_win.box()
+        msg = "Processing..."
+        if state.state == State.UPDATING:
+            msg = "Updating Videos..."
+        elif state.state == State.LOADING:
+            msg = "Registering Channel..."
+
+        self.loading_win.addstr(2, 20 - len(msg) // 2, msg, curses.A_BOLD | curses.color_pair(self.COLOR_HIGHLIGHT))
+
+        # Simple progress animation
+        spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        frame = int(time.time() * 10) % len(spinner)
+        self.loading_win.addstr(2, 2, spinner[frame])
+
+        self.loading_win.noutrefresh()
+
     def draw_error(self, state: AppState):
         self.error_win.erase()
         self.error_win.box()
-        self.error_win.attron(curses.A_BOLD)
+        self.error_win.attron(curses.A_BOLD | curses.color_pair(1)) # Red if possible
         self.error_win.addstr(1, 2, "エラーが発生しました")
-        self.error_win.attroff(curses.A_BOLD)
+        self.error_win.attroff(curses.A_BOLD | curses.color_pair(1))
 
         msg = state.error_message or "不明なエラー"
         # メッセージを折り返して表示

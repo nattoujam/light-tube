@@ -42,15 +42,14 @@ class VideoPlayerApp:
             self.storage.update_video(video)
 
     def get_display_videos(self) -> List[Video]:
-        if self.app_state.current_tab == "New":
+        # Based on sidebar selection
+        channel = self.app_state.highlighted_channel
+        if channel:
+            # Newest videos from this channel
+            return self.storage._fetch_all_videos_by_channel(channel.id, 100)
+        else:
+            # "All Videos" -> Newest 100 videos
             return self.storage.get_new_videos(100)
-        elif self.app_state.current_tab == "Random":
-            return self.storage.get_random_videos(100)
-        elif self.app_state.current_tab == "Related":
-            if self.app_state.last_played_video:
-                return self.storage.get_related_videos(self.app_state.last_played_video.id, 100)
-            return []
-        return []
 
     def _get_active_video_id(self) -> Optional[str]:
         if self.app_state.now_playing:
@@ -227,13 +226,26 @@ class VideoPlayerApp:
     def _on_key_up(self) -> None:
         self.app_state.handle_event(Event.CURSOR_UP)
 
+    def _on_key_left(self) -> None:
+        self.app_state.handle_event(Event.CURSOR_LEFT)
+
+    def _on_key_right(self) -> None:
+        self.app_state.handle_event(Event.CURSOR_RIGHT)
+        self.refresh_app_state()
+
     def _on_key_tab(self) -> None:
+        # We can keep tab for cycling or remove it
         self.app_state.handle_event(Event.TAB_NEXT)
         self.refresh_app_state()
 
     def _on_key_play(self) -> None:
-        if self.app_state.current_tab == "Channels":
+        from .state import FocusArea
+        if self.app_state.focus_area == FocusArea.SIDEBAR:
+            # Switch to main area
+            self.app_state.handle_event(Event.CURSOR_RIGHT)
+            self.refresh_app_state()
             return
+
         video = self._get_selected_video()
         if video:
             self._mark_and_transition(Event.PLAY_SELECTED, video=video)
@@ -317,11 +329,15 @@ class VideoPlayerApp:
 
         # Dispatcher map for key actions
         action_map = {
-            ord('h'): self._on_key_help,
+            ord('?'): self._on_key_help,
             ord('j'): self._on_key_down,
             curses.KEY_DOWN: self._on_key_down,
             ord('k'): self._on_key_up,
             curses.KEY_UP: self._on_key_up,
+            ord('h'): self._on_key_left,
+            curses.KEY_LEFT: self._on_key_left,
+            ord('l'): self._on_key_right,
+            curses.KEY_RIGHT: self._on_key_right,
             ord('\t'): self._on_key_tab,
             ord('\n'): self._on_key_play,
             curses.KEY_ENTER: self._on_key_play,
@@ -333,6 +349,7 @@ class VideoPlayerApp:
             ord('a'): self._on_key_add,
             ord('d'): self._on_key_delete,
             ord('r'): self._on_key_random,
+            ord('h'): self._on_key_left,
         }
 
         handler = action_map.get(key)
