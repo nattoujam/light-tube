@@ -220,15 +220,6 @@ class VideoPlayerApp:
             self.app_state.selected_idx = 0
             self.refresh_app_state()
 
-    def _on_key_tab(self) -> None:
-        from .state import FocusArea
-        # We can keep tab for cycling or remove it
-        is_switching_to_main = self.app_state.focus_area == FocusArea.SIDEBAR
-        self.app_state.handle_event(Event.TAB_NEXT)
-        if is_switching_to_main:
-            self.app_state.selected_idx = 0
-        self.refresh_app_state()
-
     def _on_key_play(self) -> None:
         from .state import FocusArea
         if self.app_state.focus_area == FocusArea.SIDEBAR:
@@ -286,10 +277,6 @@ class VideoPlayerApp:
         if self.app_state.sidebar_idx == 0: # "All Videos" cannot be deleted
             return
         self.app_state.handle_event(Event.DELETE_CHANNEL)
-
-    def _on_key_random(self) -> None:
-        self.app_state.handle_event(Event.RANDOM_REFRESH)
-        self.refresh_app_state()
 
     def handle_input(self) -> bool:
         keys = []
@@ -361,7 +348,6 @@ class VideoPlayerApp:
             curses.KEY_LEFT: self._on_key_left,
             'l': self._on_key_right,
             curses.KEY_RIGHT: self._on_key_right,
-            '\t': self._on_key_tab,
             '\n': self._on_key_play,
             '\r': self._on_key_play,
             curses.KEY_ENTER: self._on_key_play,

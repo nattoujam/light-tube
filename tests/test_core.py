@@ -24,7 +24,6 @@ class TestCore(unittest.TestCase):
         state = AppState()
         # 初期状態が正しく設定されていることを確認
         self.assertEqual(state.state, State.BOOT)
-        self.assertEqual(state.current_tab, "New")
         self.assertIsNone(state.now_playing)
         self.assertIsNone(state.mpv_pid)
 

@@ -49,12 +49,15 @@ class Tui:
         self.header_win.erase()
         self.header_win.attron(curses.A_REVERSE)
         app_name = "Lightweight Video Player"
-        tab_info = f"Tab: [{state.current_tab}]"
+
+        channel = state.highlighted_channel
+        context_name = channel.name if channel else "All Videos"
+
         status = state.update_status if state.update_status else ""
         if state.state == State.UPDATING or state.state == State.LOADING:
             status = "処理中..."
 
-        line = f" {app_name} | {tab_info} | {status}"
+        line = f" {app_name} | {context_name} | {status}"
         self.header_win.addstr(0, 0, line.ljust(self.width))
         self.header_win.attroff(curses.A_REVERSE)
         self.header_win.noutrefresh()
@@ -242,7 +245,6 @@ class Tui:
         items = [
             "↑/↓, j/k: Move",
             "←/→, h/l: Sidebar/Main",
-            "Tab: Switch Area",
             "b: Back to UI",
             "?: Toggle Help",
             "q: Quit"
@@ -266,7 +268,9 @@ class Tui:
 
         self.help_win.erase()
         self.help_win.box()
-        self.help_win.addstr(1, 2, f"Help: {state.current_tab}", curses.A_BOLD)
+        channel = state.highlighted_channel
+        context_name = channel.name if channel else "All Videos"
+        self.help_win.addstr(1, 2, f"Help: {context_name}", curses.A_BOLD)
         for i, item in enumerate(items):
             self.help_win.addstr(2 + i, 2, item)
         self.help_win.noutrefresh()
@@ -348,10 +352,6 @@ class Tui:
             self.register_win.addstr(h - 4, w // 2 - len(msg) // 2, msg, curses.color_pair(1) | curses.A_BOLD)
 
         self.register_win.noutrefresh()
-
-    def get_input_string(self, win, prompt: str, y: int, x: int) -> str:
-        # Deprecated: now handled by main loop
-        return ""
 
     def draw_loading(self, state: AppState):
         self.loading_win.erase()

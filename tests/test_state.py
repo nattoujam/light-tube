@@ -74,7 +74,7 @@ def test_ui_state_events(sample_video):
 def test_area_switch():
     from app.state import FocusArea
     state = AppState(state=State.BROWSE, focus_area=FocusArea.SIDEBAR)
-    state.handle_event(Event.TAB_NEXT)
+    state.handle_event(Event.CURSOR_RIGHT)
     assert state.focus_area == FocusArea.MAIN
-    state.handle_event(Event.TAB_NEXT)
+    state.handle_event(Event.CURSOR_LEFT)
     assert state.focus_area == FocusArea.SIDEBAR

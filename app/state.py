@@ -25,7 +25,6 @@ class FocusArea(Enum):
 @dataclass
 class AppState:
     state: State = State.BOOT
-    current_tab: str = "New"
     display_videos: List[Video] = field(default_factory=list)
     display_channels: List[Channel] = field(default_factory=list)
     selected_idx: int = 0
@@ -151,15 +150,6 @@ class AppState:
         elif event == Event.DELETE_CHANNEL:
             if self.focus_area == FocusArea.SIDEBAR and self.sidebar_idx > 0:
                 self.state = State.CONFIRM_DELETE
-        elif event == Event.TAB_NEXT or event == Event.TAB_PREV:
-            if self.focus_area == FocusArea.SIDEBAR:
-                self.focus_area = FocusArea.MAIN
-            else:
-                self.focus_area = FocusArea.SIDEBAR
-            # Note: The caller (main.py) is responsible for refreshing display_videos
-        elif event == Event.RANDOM_REFRESH:
-            # Random refresh is now deprecated in sidebar layout
-            pass
 
     def _handle_launching(self, event: Event, **kwargs: Any) -> None:
         if event == Event.MPV_SPAWNED:

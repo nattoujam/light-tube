@@ -97,15 +97,6 @@ class VideoStorage:
             created_at=datetime.fromisoformat(row['created_at'])
         )
 
-    @property
-    def videos(self) -> List[Video]:
-        # Compatibility property: returns newest 100 videos
-        return self.get_new_videos(100)
-
-    def save(self) -> None:
-        # Compatibility: no-op since we use auto-commit in context manager
-        pass
-
     def add_video(self, video: Video) -> int:
         cursor = self._run("""
             INSERT OR IGNORE INTO videos (id, title, channel, upload_date, url, viewed, started_at, channel_id, platform, video_id, created_at)
