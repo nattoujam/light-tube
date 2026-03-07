@@ -67,22 +67,28 @@ class Tui:
         self.main_win.erase()
         main_height, _ = self.main_win.getmaxyx()
 
-        items = state.current_items
-        if not items:
-            msg = "No channels registered." if state.current_tab == "Channels" else "No videos found."
-            self.main_win.addstr(1, 2, msg)
+        if state.current_tab == "Channels":
+            channels = state.display_channels
+            if not channels:
+                self.main_win.addstr(1, 2, "No channels registered.")
+            else:
+                self._adjust_scroll(state.selected_idx, main_height)
+                for i in range(main_height):
+                    idx = i + self.scroll_offset
+                    if idx >= len(channels):
+                        break
+                    self._draw_channel_line(i, idx, channels[idx], state.selected_idx)
         else:
-            self._adjust_scroll(state.selected_idx, main_height)
-            for i in range(main_height):
-                idx = i + self.scroll_offset
-                if idx >= len(items):
-                    break
-
-                item = items[idx]
-                if state.current_tab == "Channels":
-                    self._draw_channel_line(i, idx, item, state.selected_idx)
-                else:
-                    self._draw_video_line(i, idx, item, state.selected_idx)
+            videos = state.get_filtered_videos()
+            if not videos:
+                self.main_win.addstr(1, 2, "No videos found.")
+            else:
+                self._adjust_scroll(state.selected_idx, main_height)
+                for i in range(main_height):
+                    idx = i + self.scroll_offset
+                    if idx >= len(videos):
+                        break
+                    self._draw_video_line(i, idx, videos[idx], state.selected_idx)
 
         self.main_win.noutrefresh()
 

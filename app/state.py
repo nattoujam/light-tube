@@ -37,27 +37,25 @@ class AppState:
     previous_state: Optional[State] = None
 
     @property
-    def current_items(self) -> List[Any]:
-        if self.current_tab == "Channels":
-            return self.display_channels
-        return self.get_filtered_videos()
-
-    @property
     def current_limit(self) -> int:
-        return len(self.current_items)
+        if self.current_tab == "Channels":
+            return len(self.display_channels)
+        return len(self.get_filtered_videos())
 
     @property
     def highlighted_video(self) -> Optional[Video]:
-        items = self.current_items
-        if self.current_tab != "Channels" and 0 <= self.selected_idx < len(items):
-            return items[self.selected_idx]
+        if self.current_tab != "Channels":
+            videos = self.get_filtered_videos()
+            if 0 <= self.selected_idx < len(videos):
+                return videos[self.selected_idx]
         return None
 
     @property
     def highlighted_channel(self) -> Optional[Channel]:
-        items = self.current_items
-        if self.current_tab == "Channels" and 0 <= self.selected_idx < len(items):
-            return items[self.selected_idx]
+        if self.current_tab == "Channels":
+            channels = self.display_channels
+            if 0 <= self.selected_idx < len(channels):
+                return channels[self.selected_idx]
         return None
 
     def handle_event(self, event: Event, **kwargs: Any) -> None:
