@@ -132,16 +132,10 @@ class VideoPlayerApp:
         self.refresh_app_state()
 
     def _get_selected_video(self) -> Optional[Video]:
-        videos = self.app_state.get_filtered_videos()
-        if 0 <= self.app_state.selected_idx < len(videos):
-            return videos[self.app_state.selected_idx]
-        return None
+        return self.app_state.highlighted_video
 
     def _get_selected_channel(self) -> Optional[Channel]:
-        channels = self.app_state.display_channels
-        if 0 <= self.app_state.selected_idx < len(channels):
-            return channels[self.app_state.selected_idx]
-        return None
+        return self.app_state.highlighted_channel
 
     def _sync_channel_videos(self, channel: Channel, fetch_type: str = "recent", **kwargs: Any) -> int:
         """

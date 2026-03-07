@@ -36,6 +36,28 @@ class AppState:
     error_message: Optional[str] = None
     previous_state: Optional[State] = None
 
+    @property
+    def current_limit(self) -> int:
+        if self.current_tab == "Channels":
+            return len(self.display_channels)
+        return len(self.get_filtered_videos())
+
+    @property
+    def highlighted_video(self) -> Optional[Video]:
+        if self.current_tab != "Channels":
+            videos = self.get_filtered_videos()
+            if 0 <= self.selected_idx < len(videos):
+                return videos[self.selected_idx]
+        return None
+
+    @property
+    def highlighted_channel(self) -> Optional[Channel]:
+        if self.current_tab == "Channels":
+            channels = self.display_channels
+            if 0 <= self.selected_idx < len(channels):
+                return channels[self.selected_idx]
+        return None
+
     def handle_event(self, event: Event, **kwargs: Any) -> None:
         if event == Event.QUIT:
             return
@@ -50,8 +72,7 @@ class AppState:
             return
 
         if event == Event.CURSOR_DOWN:
-            limit = len(self.display_channels) if self.current_tab == "Channels" else len(self.display_videos)
-            if self.selected_idx < limit - 1:
+            if self.selected_idx < self.current_limit - 1:
                 self.selected_idx += 1
             return
 
@@ -59,8 +80,7 @@ class AppState:
             self.display_videos = kwargs.get('videos', [])
             self.display_channels = kwargs.get('channels', [])
             # Adjust selected_idx if it's out of bounds
-            limit = len(self.display_channels) if self.current_tab == "Channels" else len(self.display_videos)
-            self.selected_idx = max(0, min(self.selected_idx, limit - 1))
+            self.selected_idx = max(0, min(self.selected_idx, self.current_limit - 1))
 
             if self.state == State.BOOT:
                 self.state = State.BROWSE
@@ -100,7 +120,7 @@ class AppState:
             self.previous_state = self.state
             self.state = State.REGISTER
         elif event == Event.DELETE_CHANNEL:
-            if self.current_tab == "Channels" and self.display_channels:
+            if self.current_tab == "Channels" and self.current_limit > 0:
                 self.state = State.CONFIRM_DELETE
         elif event == Event.TAB_NEXT or event == Event.TAB_PREV:
             tabs = ["New", "Random", "Related", "Channels"]

@@ -74,30 +74,27 @@ class Tui:
             else:
                 self._adjust_scroll(state.selected_idx, main_height)
                 for i in range(main_height):
-                    channel_idx = i + self.scroll_offset
-                    if channel_idx >= len(channels):
+                    idx = i + self.scroll_offset
+                    if idx >= len(channels):
                         break
-                    self._draw_channel_line(i, channel_idx, channels[channel_idx], state.selected_idx)
+                    self._draw_channel_line(i, idx, channels[idx], state.selected_idx)
         else:
             videos = state.get_filtered_videos()
             if not videos:
                 self.main_win.addstr(1, 2, "No videos found.")
             else:
                 self._adjust_scroll(state.selected_idx, main_height)
-
                 for i in range(main_height):
-                    video_idx = i + self.scroll_offset
-                    if video_idx >= len(videos):
+                    idx = i + self.scroll_offset
+                    if idx >= len(videos):
                         break
-                    self._draw_video_line(i, video_idx, videos[video_idx], state.selected_idx)
+                    self._draw_video_line(i, idx, videos[idx], state.selected_idx)
 
         self.main_win.noutrefresh()
 
-    def _draw_channel_line(self, y: int, idx: int, channel: Channel, selected_idx: int) -> None:
-        prefix = ">" if idx == selected_idx else " "
-        line = f"{prefix} {channel.name} ({channel.platform})"
+    def _draw_line(self, y: int, idx: int, line: str, selected_idx: int) -> None:
+        """Helper to draw a line with selection highlight and error handling."""
         display_line = self._truncate_with_width(line, self.width - 2)
-
         try:
             if idx == selected_idx:
                 self.main_win.attron(curses.A_REVERSE)
@@ -109,32 +106,20 @@ class Tui:
         except curses.error:
             pass
 
-    def _draw_video_line(self, y: int, video_idx: int, video: Video, selected_idx: int) -> None:
-        prefix = ">" if video_idx == selected_idx else " "
+    def _draw_channel_line(self, y: int, idx: int, channel: Channel, selected_idx: int) -> None:
+        prefix = ">" if idx == selected_idx else " "
+        line = f"{prefix} {channel.name} ({channel.platform})"
+        self._draw_line(y, idx, line, selected_idx)
+
+    def _draw_video_line(self, y: int, idx: int, video: Video, selected_idx: int) -> None:
+        prefix = ">" if idx == selected_idx else " "
         viewed_mark = "[v]" if video.viewed else "[ ]"
 
-        # Calculate max title length to avoid overflow
-        # Space for prefix(2), viewed_mark(4), space(1), channel(varies), parens(2)
         channel_info = f"({video.channel.name})"
         available_width = self.width - 10 - len(channel_info)
         title = self._truncate_with_width(video.title, available_width)
         line = f"{prefix} {viewed_mark} {title} {channel_info}"
-
-        # Avoid writing to the last column of the last line to prevent ERR
-        # Using self.width - 2 for extra safety
-        display_line = self._truncate_with_width(line, self.width - 2)
-
-        try:
-            if video_idx == selected_idx:
-                self.main_win.attron(curses.A_REVERSE)
-                # Use custom pad instead of ljust (which is char-count based)
-                padded_line = self._pad_with_width(display_line, self.width - 2)
-                self.main_win.addstr(y, 0, padded_line)
-                self.main_win.attroff(curses.A_REVERSE)
-            else:
-                self.main_win.addstr(y, 0, display_line)
-        except curses.error:
-            pass # Ignore write errors to the very edge
+        self._draw_line(y, idx, line, selected_idx)
 
     def _get_status_text(self, state: AppState) -> str:
         status_text = "▶ Ready"
@@ -234,10 +219,7 @@ class Tui:
         self.confirm_win.box()
         self.confirm_win.addstr(1, 2, "チャンネル削除の確認", curses.A_BOLD)
 
-        channel = None
-        if 0 <= state.selected_idx < len(state.display_channels):
-            channel = state.display_channels[state.selected_idx]
-
+        channel = state.highlighted_channel
         name = channel.name if channel else "???"
         self.confirm_win.addstr(3, 2, f"チャンネル 「{name}」 を削除しますか？")
         self.confirm_win.addstr(4, 2, "紐付く動画データもすべて削除されます。")
