@@ -171,23 +171,27 @@ class VideoPlayerApp:
             self.app_state.handle_event(Event.UPDATE_FAILED, error=str(e))
 
     def _run_registration_flow(self) -> None:
-        self.ui.render(self.app_state)
         try:
-            # Step 1: Platform selection (Single key)
-            self.stdscr.nodelay(False)
-            key = self.stdscr.getch()
-            self.stdscr.nodelay(True)
+            # Step 1: Platform selection
+            platform_name = ""
+            while True:
+                self.ui.render(self.app_state)
+                self.stdscr.nodelay(False)
+                key = self.stdscr.getch()
+                self.stdscr.nodelay(True)
 
-            if key == 27: # ESC only
-                self.app_state.handle_event(Event.BACK_TO_UI)
-                return
+                if key == 27: # ESC
+                    self.app_state.handle_event(Event.BACK_TO_UI)
+                    return
 
-            # For now, only 'y' (YouTube) is supported
-            if key != ord('y'):
-                self.app_state.handle_event(Event.BACK_TO_UI)
-                return
+                if key == ord('y'):
+                    platform_name = "youtube"
+                    break
 
-            platform_name = "youtube"
+                # Feedback for invalid key
+                # (Optional: show error on register_win)
+
+            self.app_state.update_status = f"Platform: {platform_name}"
             self.ui.render(self.app_state)
 
             # Step 2: Channel Name input

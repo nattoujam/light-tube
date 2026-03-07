@@ -308,10 +308,16 @@ class Tui:
         # Title with highlight
         self.register_win.addstr(1, w // 2 - 7, " チャンネル登録 ", curses.A_BOLD | curses.color_pair(self.COLOR_HIGHLIGHT))
 
-        self.register_win.addstr(3, 4, "1. プラットフォームを選択")
-        self.register_win.addstr(4, 7, "y: YouTube", curses.A_DIM)
+        # Step 1: Platform
+        p_attr = curses.A_BOLD if not state.update_status or "Platform" not in state.update_status else curses.A_DIM
+        self.register_win.addstr(3, 4, "1. プラットフォームを選択", p_attr)
 
-        self.register_win.addstr(6, 4, "2. チャンネル名を入力")
+        y_attr = curses.color_pair(self.COLOR_HIGHLIGHT) if state.update_status and "youtube" in state.update_status else curses.A_DIM
+        self.register_win.addstr(4, 7, "[y]: YouTube", y_attr)
+
+        # Step 2: Channel Name
+        n_attr = curses.A_BOLD if state.update_status and "Platform" in state.update_status else curses.A_DIM
+        self.register_win.addstr(6, 4, "2. チャンネル名を入力", n_attr)
 
         # Footer guidance
         self.register_win.addstr(h - 2, 4, "[Esc: キャンセル]", curses.A_DIM)
@@ -329,12 +335,23 @@ class Tui:
         self.stdscr.nodelay(False)
 
         prompt_width = self._get_display_width(prompt)
+        win.attron(curses.color_pair(self.COLOR_HIGHLIGHT))
         win.addstr(y, x, prompt, curses.A_BOLD)
+        win.attroff(curses.color_pair(self.COLOR_HIGHLIGHT))
+
+        # Visual underline/input field area
+        _, w = win.getmaxyx()
+        input_area_width = w - x - prompt_width - 4
+        win.addstr(y, x + prompt_width, "_" * input_area_width, curses.A_DIM)
         win.refresh()
 
         try:
-            # We use win.getstr to get input at the correct window position
-            input_bytes = win.getstr(y, x + prompt_width)
+            # Move cursor back to start of underline
+            curses.setsyx(win.getbegy() + y, win.getbegx() + x + prompt_width)
+            curses.doupdate()
+
+            # Use win.getstr to get input
+            input_bytes = win.getstr(y, x + prompt_width, input_area_width)
             input_str = input_bytes.decode('utf-8')
         except:
             input_str = ""
