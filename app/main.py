@@ -221,22 +221,34 @@ class VideoPlayerApp:
         self.app_state.handle_event(Event.HELP_TOGGLE)
 
     def _on_key_down(self) -> None:
+        from .state import FocusArea
         self.app_state.handle_event(Event.CURSOR_DOWN)
+        if self.app_state.focus_area == FocusArea.SIDEBAR:
+            self.refresh_app_state()
 
     def _on_key_up(self) -> None:
+        from .state import FocusArea
         self.app_state.handle_event(Event.CURSOR_UP)
+        if self.app_state.focus_area == FocusArea.SIDEBAR:
+            self.refresh_app_state()
 
     def _on_key_left(self) -> None:
         self.app_state.handle_event(Event.CURSOR_LEFT)
 
     def _on_key_right(self) -> None:
-        self.app_state.handle_event(Event.CURSOR_RIGHT)
-        self.app_state.selected_idx = 0
-        self.refresh_app_state()
+        from .state import FocusArea
+        if self.app_state.focus_area == FocusArea.SIDEBAR:
+            self.app_state.handle_event(Event.CURSOR_RIGHT)
+            self.app_state.selected_idx = 0
+            self.refresh_app_state()
 
     def _on_key_tab(self) -> None:
+        from .state import FocusArea
         # We can keep tab for cycling or remove it
+        is_switching_to_main = self.app_state.focus_area == FocusArea.SIDEBAR
         self.app_state.handle_event(Event.TAB_NEXT)
+        if is_switching_to_main:
+            self.app_state.selected_idx = 0
         self.refresh_app_state()
 
     def _on_key_play(self) -> None:

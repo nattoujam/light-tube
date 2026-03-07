@@ -88,13 +88,17 @@ class Tui:
         elif selected_idx >= self.scroll_offset + main_height:
             self.scroll_offset = selected_idx - main_height + 1
 
-    def _draw_scrollbar(self, win, current_idx: int, total_items: int):
+    def _draw_scrollbar(self, win, offset: int, total_items: int):
         h, w = win.getmaxyx()
         if total_items <= h:
             return
 
+        # Handle (thumb) height based on visible proportion
         bar_height = max(1, int(h * h / total_items))
-        bar_pos = int(h * current_idx / total_items)
+        # Handle position based on scroll offset
+        bar_pos = int(h * offset / total_items)
+        # Prevent handle from overflowing
+        bar_pos = min(bar_pos, h - bar_height)
 
         for i in range(h):
             char = "┃" if bar_pos <= i < bar_pos + bar_height else "│"
@@ -139,7 +143,7 @@ class Tui:
             except curses.error:
                 pass
 
-        self._draw_scrollbar(self.sidebar_win, state.sidebar_idx, total_items)
+        self._draw_scrollbar(self.sidebar_win, self.sidebar_scroll_offset, total_items)
         # Vertical divider
         for i in range(h):
             try:
@@ -188,7 +192,7 @@ class Tui:
                 except curses.error:
                     pass
 
-        self._draw_scrollbar(self.main_win, state.selected_idx, len(videos))
+        self._draw_scrollbar(self.main_win, self.scroll_offset, len(videos))
         self.main_win.noutrefresh()
 
     def _get_status_text(self, state: AppState) -> str:
