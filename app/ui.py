@@ -332,6 +332,7 @@ class Tui:
     def get_input_string(self, win, prompt: str, y: int, x: int) -> str:
         curses.noecho()
         curses.curs_set(1)
+        win.keypad(True)
         self.stdscr.nodelay(False)
 
         prompt_width = self._get_display_width(prompt)
@@ -355,25 +356,22 @@ class Tui:
             win.move(y, x + prompt_width + cursor_pos)
             win.refresh()
 
-            ch = win.getch()
+            try:
+                ch = win.get_wch()
+            except:
+                continue
 
-            if ch in (10, 13, curses.KEY_ENTER): # Enter
+            if ch == "\n" or ch == "\r" or ch == curses.KEY_ENTER: # Enter
                 break
-            elif ch == 27: # Esc
+            elif ch == "\x1b": # Esc
                 input_str = ""
                 break
-            elif ch in (curses.KEY_BACKSPACE, 127, 8): # Backspace
+            elif ch == curses.KEY_BACKSPACE or ch == "\x7f" or ch == "\x08": # Backspace
                 if len(input_str) > 0:
                     input_str = input_str[:-1]
-            elif 32 <= ch <= 126: # Regular ASCII
+            elif isinstance(ch, str): # Regular character
                 if len(input_str) < 50:
-                    input_str += chr(ch)
-            elif ch > 127: # Potential Multi-byte (simplified)
-                try:
-                    # Very basic handling for non-ASCII (single char only)
-                    input_str += chr(ch)
-                except:
-                    pass
+                    input_str += ch
 
         self.stdscr.nodelay(True)
         curses.curs_set(0)

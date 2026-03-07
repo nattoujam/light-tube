@@ -172,19 +172,23 @@ class VideoPlayerApp:
 
     def _run_registration_flow(self) -> None:
         try:
+            curses.flushinp()
             # Step 1: Platform selection
             platform_name = ""
             while True:
                 self.ui.render(self.app_state)
                 self.stdscr.nodelay(False)
-                key = self.stdscr.getch()
+                try:
+                    key = self.stdscr.get_wch()
+                except:
+                    continue
                 self.stdscr.nodelay(True)
 
-                if key == 27: # ESC
+                if key == "\x1b": # ESC
                     self.app_state.handle_event(Event.BACK_TO_UI)
                     return
 
-                if key == ord('y'):
+                if key == "y":
                     platform_name = "youtube"
                     break
 
@@ -221,6 +225,8 @@ class VideoPlayerApp:
                 self.app_state.handle_event(Event.BACK_TO_UI)
         except Exception as e:
             self.app_state.handle_event(Event.REGISTRATION_FAILED, error=str(e))
+        finally:
+            curses.flushinp()
 
     def _on_key_help(self) -> None:
         self.app_state.handle_event(Event.HELP_TOGGLE)
