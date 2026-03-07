@@ -1,4 +1,5 @@
 import curses
+import time
 from typing import List, Optional, Tuple
 import random
 from .state import AppState, State

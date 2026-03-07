@@ -231,6 +231,7 @@ class VideoPlayerApp:
 
     def _on_key_right(self) -> None:
         self.app_state.handle_event(Event.CURSOR_RIGHT)
+        self.app_state.selected_idx = 0
         self.refresh_app_state()
 
     def _on_key_tab(self) -> None:
@@ -243,6 +244,7 @@ class VideoPlayerApp:
         if self.app_state.focus_area == FocusArea.SIDEBAR:
             # Switch to main area
             self.app_state.handle_event(Event.CURSOR_RIGHT)
+            self.app_state.selected_idx = 0
             self.refresh_app_state()
             return
 
@@ -277,7 +279,8 @@ class VideoPlayerApp:
             self._handle_history_update(video)
 
     def _on_key_add(self) -> None:
-        if self.app_state.current_tab != "Channels":
+        from .state import FocusArea
+        if self.app_state.focus_area != FocusArea.SIDEBAR:
             return
         if self.app_state.state != State.REGISTER:
             self.app_state.handle_event(Event.REGISTER_CHANNEL)
@@ -285,7 +288,10 @@ class VideoPlayerApp:
             self._run_registration_flow()
 
     def _on_key_delete(self) -> None:
-        if self.app_state.current_tab != "Channels":
+        from .state import FocusArea
+        if self.app_state.focus_area != FocusArea.SIDEBAR:
+            return
+        if self.app_state.sidebar_idx == 0: # "All Videos" cannot be deleted
             return
         self.app_state.handle_event(Event.DELETE_CHANNEL)
 
@@ -349,7 +355,6 @@ class VideoPlayerApp:
             ord('a'): self._on_key_add,
             ord('d'): self._on_key_delete,
             ord('r'): self._on_key_random,
-            ord('h'): self._on_key_left,
         }
 
         handler = action_map.get(key)

@@ -146,7 +146,7 @@ class AppState:
             self.previous_state = self.state
             self.state = State.REGISTER
         elif event == Event.DELETE_CHANNEL:
-            if self.current_tab == "Channels" and self.current_limit > 0:
+            if self.focus_area == FocusArea.SIDEBAR and self.sidebar_idx > 0:
                 self.state = State.CONFIRM_DELETE
         elif event == Event.TAB_NEXT or event == Event.TAB_PREV:
             if self.focus_area == FocusArea.SIDEBAR:
