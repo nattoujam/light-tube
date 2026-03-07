@@ -18,6 +18,10 @@ class State(Enum):
     CONFIRM_DELETE = auto()
     ERROR = auto()
 
+class FocusArea(Enum):
+    SIDEBAR = auto()
+    MAIN = auto()
+
 @dataclass
 class AppState:
     state: State = State.BOOT
@@ -25,6 +29,9 @@ class AppState:
     display_videos: List[Video] = field(default_factory=list)
     display_channels: List[Channel] = field(default_factory=list)
     selected_idx: int = 0
+    sidebar_idx: int = 0
+    focus_area: FocusArea = FocusArea.SIDEBAR
+    selected_channel_id: Optional[int] = None # None means "All Videos"
     show_help: bool = False
     busy_until: Optional[datetime] = None
     selected_video: Optional[Video] = None
@@ -35,27 +42,30 @@ class AppState:
     update_status: Optional[str] = None
     error_message: Optional[str] = None
     previous_state: Optional[State] = None
+    registration_step: int = 0  # 0: platform, 1: channel name
+    registration_buffer: str = ""
+    registration_platform: str = ""
 
     @property
     def current_limit(self) -> int:
-        if self.current_tab == "Channels":
-            return len(self.display_channels)
-        return len(self.get_filtered_videos())
+        if self.focus_area == FocusArea.SIDEBAR:
+            return 1 + len(self.display_channels) # "All Videos" + Channels
+        return len(self.display_videos)
 
     @property
     def highlighted_video(self) -> Optional[Video]:
-        if self.current_tab != "Channels":
-            videos = self.get_filtered_videos()
-            if 0 <= self.selected_idx < len(videos):
-                return videos[self.selected_idx]
+        if self.focus_area == FocusArea.MAIN:
+            if 0 <= self.selected_idx < len(self.display_videos):
+                return self.display_videos[self.selected_idx]
         return None
 
     @property
     def highlighted_channel(self) -> Optional[Channel]:
-        if self.current_tab == "Channels":
-            channels = self.display_channels
-            if 0 <= self.selected_idx < len(channels):
-                return channels[self.selected_idx]
+        # idx 0 in sidebar is "All Videos"
+        if self.sidebar_idx > 0:
+            channel_idx = self.sidebar_idx - 1
+            if 0 <= channel_idx < len(self.display_channels):
+                return self.display_channels[channel_idx]
         return None
 
     def handle_event(self, event: Event, **kwargs: Any) -> None:
@@ -67,13 +77,32 @@ class AppState:
             return
 
         if event == Event.CURSOR_UP:
-            if self.selected_idx > 0:
-                self.selected_idx -= 1
+            if self.focus_area == FocusArea.SIDEBAR:
+                if self.sidebar_idx > 0:
+                    self.sidebar_idx -= 1
+            else:
+                if self.selected_idx > 0:
+                    self.selected_idx -= 1
             return
 
         if event == Event.CURSOR_DOWN:
-            if self.selected_idx < self.current_limit - 1:
-                self.selected_idx += 1
+            if self.focus_area == FocusArea.SIDEBAR:
+                if self.sidebar_idx < self.current_limit - 1:
+                    self.sidebar_idx += 1
+            else:
+                if self.selected_idx < self.current_limit - 1:
+                    self.selected_idx += 1
+            return
+
+        if event == Event.CURSOR_RIGHT:
+            if self.focus_area == FocusArea.SIDEBAR:
+                self.focus_area = FocusArea.MAIN
+                # Selection logic for which channel's videos to show will be in main.py
+            return
+
+        if event == Event.CURSOR_LEFT:
+            if self.focus_area == FocusArea.MAIN:
+                self.focus_area = FocusArea.SIDEBAR
             return
 
         if event == Event.CACHE_LOADED:
@@ -120,21 +149,16 @@ class AppState:
             self.previous_state = self.state
             self.state = State.REGISTER
         elif event == Event.DELETE_CHANNEL:
-            if self.current_tab == "Channels" and self.current_limit > 0:
+            if self.focus_area == FocusArea.SIDEBAR and self.sidebar_idx > 0:
                 self.state = State.CONFIRM_DELETE
         elif event == Event.TAB_NEXT or event == Event.TAB_PREV:
-            tabs = ["New", "Random", "Related", "Channels"]
-            idx = tabs.index(self.current_tab)
-            if event == Event.TAB_NEXT:
-                self.current_tab = tabs[(idx + 1) % len(tabs)]
+            if self.focus_area == FocusArea.SIDEBAR:
+                self.focus_area = FocusArea.MAIN
             else:
-                self.current_tab = tabs[(idx - 1) % len(tabs)]
-            self.selected_idx = 0
+                self.focus_area = FocusArea.SIDEBAR
             # Note: The caller (main.py) is responsible for refreshing display_videos
         elif event == Event.RANDOM_REFRESH:
-            if self.current_tab == "Random":
-                self.selected_idx = 0
-            # Note: The caller (main.py) is responsible for refreshing display_videos
+            # Random refresh is now deprecated in sidebar layout
             pass
 
     def _handle_launching(self, event: Event, **kwargs: Any) -> None:
@@ -184,11 +208,15 @@ class AppState:
             self.state = State.LOADING
         elif event == Event.BACK_TO_UI:
             self.state = State.BROWSE
+            self.registration_step = 0
+            self.registration_buffer = ""
 
     def _handle_loading(self, event: Event, **kwargs: Any) -> None:
         if event == Event.REGISTRATION_SUCCEEDED:
             self.update_status = "登録完了"
             self.state = State.BROWSE
+            self.registration_step = 0
+            self.registration_buffer = ""
         elif event == Event.REGISTRATION_FAILED:
             self.error_message = str(kwargs.get('error'))
             self.state = State.ERROR

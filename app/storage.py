@@ -174,6 +174,16 @@ class VideoStorage:
         """, (limit,))
         return [self._row_to_video(row) for row in rows]
 
+    def get_videos_by_channel(self, channel_id: int, limit: int = 100) -> List[Video]:
+        rows = self._fetch_all("""
+            SELECT v.*, c.external_id, c.created_at as channel_created_at
+            FROM videos v
+            JOIN channels c ON v.channel_id = c.id
+            WHERE v.channel_id = ?
+            ORDER BY v.upload_date DESC LIMIT ?
+        """, (channel_id, limit))
+        return [self._row_to_video(row) for row in rows]
+
     def get_random_videos(self, limit: int = 100) -> List[Video]:
         rows = self._fetch_all("""
             SELECT v.*, c.external_id, c.created_at as channel_created_at
