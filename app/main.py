@@ -178,7 +178,7 @@ class VideoPlayerApp:
             key = self.stdscr.getch()
             self.stdscr.nodelay(True)
 
-            if key == ord('b') or key == 27: # 'b' or ESC
+            if key == 27: # ESC only
                 self.app_state.handle_event(Event.BACK_TO_UI)
                 return
 
@@ -191,7 +191,8 @@ class VideoPlayerApp:
             self.ui.render(self.app_state)
 
             # Step 2: Channel Name input
-            channel_name = self.ui.get_input_string("  入力: ", self.ui.height // 2 + 1, self.ui.width // 2 - 20)
+            # Use specific window for input
+            channel_name = self.ui.get_input_string(self.ui.register_win, "  入力: ", 7, 4)
 
             if channel_name:
                 self.app_state.handle_event(Event.UPDATE_STARTED)

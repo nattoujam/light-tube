@@ -303,20 +303,46 @@ class Tui:
     def draw_register(self, state: AppState):
         self.register_win.erase()
         self.register_win.box()
-        self.register_win.addstr(1, 2, "チャンネル登録", curses.A_BOLD)
-        self.register_win.addstr(3, 2, "1. プラットフォームを選択")
-        self.register_win.addstr(4, 5, "(y: YouTube)")
-        self.register_win.addstr(6, 2, "2. チャンネル名(YT) を入力")
-        self.register_win.addstr(9, 2, "bキーまたはEnter空押しでキャンセル")
+        h, w = self.register_win.getmaxyx()
+
+        # Title with highlight
+        self.register_win.addstr(1, w // 2 - 7, " チャンネル登録 ", curses.A_BOLD | curses.color_pair(self.COLOR_HIGHLIGHT))
+
+        self.register_win.addstr(3, 4, "1. プラットフォームを選択")
+        self.register_win.addstr(4, 7, "y: YouTube", curses.A_DIM)
+
+        self.register_win.addstr(6, 4, "2. チャンネル名を入力")
+
+        # Footer guidance
+        self.register_win.addstr(h - 2, 4, "[Esc: キャンセル]", curses.A_DIM)
 
         # エラーメッセージがあれば表示
         if state.error_message:
-            self.register_win.attron(curses.color_pair(1) if curses.has_colors() else curses.A_BOLD)
-            self.register_win.addstr(10, 2, f"エラー: {state.error_message[:54]}")
-            if curses.has_colors():
-                self.register_win.attroff(curses.color_pair(1))
+            msg = f" Error: {state.error_message[:45]} "
+            self.register_win.addstr(h - 4, w // 2 - len(msg) // 2, msg, curses.color_pair(1) | curses.A_BOLD)
 
         self.register_win.noutrefresh()
+
+    def get_input_string(self, win, prompt: str, y: int, x: int) -> str:
+        curses.echo()
+        curses.curs_set(1)
+        self.stdscr.nodelay(False)
+
+        prompt_width = self._get_display_width(prompt)
+        win.addstr(y, x, prompt, curses.A_BOLD)
+        win.refresh()
+
+        try:
+            # We use win.getstr to get input at the correct window position
+            input_bytes = win.getstr(y, x + prompt_width)
+            input_str = input_bytes.decode('utf-8')
+        except:
+            input_str = ""
+
+        self.stdscr.nodelay(True)
+        curses.curs_set(0)
+        curses.noecho()
+        return input_str
 
     def draw_loading(self, state: AppState):
         self.loading_win.erase()
