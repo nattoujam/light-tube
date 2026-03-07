@@ -79,7 +79,7 @@ class Tui:
                     break
 
                 item = items[idx]
-                if isinstance(item, Channel):
+                if state.current_tab == "Channels":
                     self._draw_channel_line(i, idx, item, state.selected_idx)
                 else:
                     self._draw_video_line(i, idx, item, state.selected_idx)
@@ -213,8 +213,8 @@ class Tui:
         self.confirm_win.box()
         self.confirm_win.addstr(1, 2, "チャンネル削除の確認", curses.A_BOLD)
 
-        channel = state.selected_item
-        name = channel.name if isinstance(channel, Channel) else "???"
+        channel = state.highlighted_channel
+        name = channel.name if channel else "???"
         self.confirm_win.addstr(3, 2, f"チャンネル 「{name}」 を削除しますか？")
         self.confirm_win.addstr(4, 2, "紐付く動画データもすべて削除されます。")
         self.confirm_win.addstr(6, 2, "y: 削除する  /  n: キャンセル", curses.A_REVERSE)

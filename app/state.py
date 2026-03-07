@@ -40,16 +40,23 @@ class AppState:
     def current_items(self) -> List[Any]:
         if self.current_tab == "Channels":
             return self.display_channels
-        return self.display_videos
+        return self.get_filtered_videos()
 
     @property
     def current_limit(self) -> int:
         return len(self.current_items)
 
     @property
-    def selected_item(self) -> Optional[Any]:
+    def highlighted_video(self) -> Optional[Video]:
         items = self.current_items
-        if 0 <= self.selected_idx < len(items):
+        if self.current_tab != "Channels" and 0 <= self.selected_idx < len(items):
+            return items[self.selected_idx]
+        return None
+
+    @property
+    def highlighted_channel(self) -> Optional[Channel]:
+        items = self.current_items
+        if self.current_tab == "Channels" and 0 <= self.selected_idx < len(items):
             return items[self.selected_idx]
         return None
 

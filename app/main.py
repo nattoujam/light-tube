@@ -132,12 +132,10 @@ class VideoPlayerApp:
         self.refresh_app_state()
 
     def _get_selected_video(self) -> Optional[Video]:
-        item = self.app_state.selected_item
-        return item if isinstance(item, Video) else None
+        return self.app_state.highlighted_video
 
     def _get_selected_channel(self) -> Optional[Channel]:
-        item = self.app_state.selected_item
-        return item if isinstance(item, Channel) else None
+        return self.app_state.highlighted_channel
 
     def _sync_channel_videos(self, channel: Channel, fetch_type: str = "recent", **kwargs: Any) -> int:
         """
