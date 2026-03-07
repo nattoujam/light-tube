@@ -174,7 +174,7 @@ class VideoStorage:
         """, (limit,))
         return [self._row_to_video(row) for row in rows]
 
-    def _fetch_all_videos_by_channel(self, channel_id: int, limit: int = 100) -> List[Video]:
+    def get_videos_by_channel(self, channel_id: int, limit: int = 100) -> List[Video]:
         rows = self._fetch_all("""
             SELECT v.*, c.external_id, c.created_at as channel_created_at
             FROM videos v

@@ -46,7 +46,7 @@ class VideoPlayerApp:
         channel = self.app_state.highlighted_channel
         if channel:
             # Newest videos from this channel
-            return self.storage._fetch_all_videos_by_channel(channel.id, 100)
+            return self.storage.get_videos_by_channel(channel.id, 100)
         else:
             # "All Videos" -> Newest 100 videos
             return self.storage.get_new_videos(100)
@@ -170,63 +170,30 @@ class VideoPlayerApp:
         except Exception as e:
             self.app_state.handle_event(Event.UPDATE_FAILED, error=str(e))
 
-    def _run_registration_flow(self) -> None:
+    def _submit_registration(self) -> None:
+        platform_name = self.app_state.registration_platform
+        channel_name = self.app_state.registration_buffer
+
+        self.app_state.handle_event(Event.UPDATE_STARTED)
+        self.ui.render(self.app_state)
+
         try:
-            curses.flushinp()
-            # Step 1: Platform selection
-            platform_name = ""
-            while True:
-                self.ui.render(self.app_state)
-                self.stdscr.nodelay(False)
-                try:
-                    key = self.stdscr.get_wch()
-                except:
-                    continue
-                self.stdscr.nodelay(True)
+            external_id = self.channel_resolver.resolve(platform_name, channel_name)
+            channel_id = self.repository.save_channel(platform_name, channel_name, external_id)
 
-                if key == "\x1b": # ESC
-                    self.app_state.handle_event(Event.BACK_TO_UI)
-                    return
+            channel = Channel(
+                id=channel_id,
+                platform=platform_name,
+                name=channel_name,
+                external_id=external_id,
+                created_at=datetime.now()
+            )
+            self._sync_channel_videos(channel, fetch_type="recent", limit=50)
 
-                if key == "y":
-                    platform_name = "youtube"
-                    break
-
-                # Feedback for invalid key
-                # (Optional: show error on register_win)
-
-            self.app_state.update_status = f"Platform: {platform_name}"
-            self.ui.render(self.app_state)
-
-            # Step 2: Channel Name input
-            # Use specific window for input
-            channel_name = self.ui.get_input_string(self.ui.register_win, "  入力: ", 7, 4)
-
-            if channel_name:
-                self.app_state.handle_event(Event.UPDATE_STARTED)
-                self.ui.render(self.app_state)
-
-                external_id = self.channel_resolver.resolve(platform_name, channel_name)
-                channel_id = self.repository.save_channel(platform_name, channel_name, external_id)
-
-                # Use Channel model for sync_channel_videos
-                channel = Channel(
-                    id=channel_id,
-                    platform=platform_name,
-                    name=channel_name,
-                    external_id=external_id,
-                    created_at=datetime.now()
-                )
-                self._sync_channel_videos(channel, fetch_type="recent", limit=50)
-
-                self.app_state.handle_event(Event.REGISTRATION_SUCCEEDED)
-                self.refresh_app_state()
-            else:
-                self.app_state.handle_event(Event.BACK_TO_UI)
+            self.app_state.handle_event(Event.REGISTRATION_SUCCEEDED)
+            self.refresh_app_state()
         except Exception as e:
             self.app_state.handle_event(Event.REGISTRATION_FAILED, error=str(e))
-        finally:
-            curses.flushinp()
 
     def _on_key_help(self) -> None:
         self.app_state.handle_event(Event.HELP_TOGGLE)
@@ -308,7 +275,9 @@ class VideoPlayerApp:
         if self.app_state.state != State.REGISTER:
             self.app_state.handle_event(Event.REGISTER_CHANNEL)
             self.app_state.error_message = None
-            self._run_registration_flow()
+            self.app_state.registration_step = 0
+            self.app_state.registration_buffer = ""
+            self.app_state.registration_platform = ""
 
     def _on_key_delete(self) -> None:
         from .state import FocusArea
@@ -323,61 +292,76 @@ class VideoPlayerApp:
         self.refresh_app_state()
 
     def handle_input(self) -> bool:
-        keys = []
-        while True:
-            try:
-                k = self.stdscr.getch()
-                if k == -1:
-                    break
-                keys.append(k)
-            except:
-                break
-
-        if not keys:
+        try:
+            key = self.stdscr.get_wch()
+        except:
             return True
 
-        if any(k == ord('q') for k in keys):
+        if key == 'q':
             self.player.stop()
             return False
 
-        key = keys[-1]
+        # Handle REGISTER state (Modal)
+        if self.app_state.state == State.REGISTER:
+            if key == "\x1b": # ESC
+                self.app_state.handle_event(Event.BACK_TO_UI)
+                return True
 
-        # Handle keys specifically for confirmation state
+            if self.app_state.registration_step == 0: # Platform selection
+                if key == "y":
+                    self.app_state.registration_platform = "youtube"
+                    self.app_state.registration_step = 1
+                return True
+            else: # Channel name input
+                if key == "\n" or key == "\r" or key == curses.KEY_ENTER:
+                    if self.app_state.registration_buffer:
+                        self._submit_registration()
+                    else:
+                        self.app_state.handle_event(Event.BACK_TO_UI)
+                elif key == curses.KEY_BACKSPACE or key == "\x7f" or key == "\x08":
+                    if len(self.app_state.registration_buffer) > 0:
+                        self.app_state.registration_buffer = self.app_state.registration_buffer[:-1]
+                elif isinstance(key, str):
+                    if len(self.app_state.registration_buffer) < 50:
+                        self.app_state.registration_buffer += key
+                return True
+
+        # Handle CONFIRM_DELETE state
         if self.app_state.state == State.CONFIRM_DELETE:
-            if key == ord('y'):
+            if key == 'y':
                 channel = self._get_selected_channel()
                 if channel:
                     self.storage.delete_channel(channel.id)
                     self.refresh_app_state()
                 self.app_state.handle_event(Event.BACK_TO_UI)
                 return True
-            elif key == ord('n') or key == ord('b'):
+            elif key == 'n' or key == 'b' or key == "\x1b":
                 self.app_state.handle_event(Event.BACK_TO_UI)
                 return True
             return True
 
         # Dispatcher map for key actions
         action_map = {
-            ord('?'): self._on_key_help,
-            ord('j'): self._on_key_down,
+            '?': self._on_key_help,
+            'j': self._on_key_down,
             curses.KEY_DOWN: self._on_key_down,
-            ord('k'): self._on_key_up,
+            'k': self._on_key_up,
             curses.KEY_UP: self._on_key_up,
-            ord('h'): self._on_key_left,
+            'h': self._on_key_left,
             curses.KEY_LEFT: self._on_key_left,
-            ord('l'): self._on_key_right,
+            'l': self._on_key_right,
             curses.KEY_RIGHT: self._on_key_right,
-            ord('\t'): self._on_key_tab,
-            ord('\n'): self._on_key_play,
+            '\t': self._on_key_tab,
+            '\n': self._on_key_play,
+            '\r': self._on_key_play,
             curses.KEY_ENTER: self._on_key_play,
-            ord('n'): self._on_key_next,
-            ord('s'): self._on_key_stop,
-            ord('b'): self._on_key_back,
-            ord('u'): self._on_key_update,
-            ord('i'): self._on_key_history,
-            ord('a'): self._on_key_add,
-            ord('d'): self._on_key_delete,
-            ord('r'): self._on_key_random,
+            'n': self._on_key_next,
+            's': self._on_key_stop,
+            'b': self._on_key_back,
+            'u': self._on_key_update,
+            'i': self._on_key_history,
+            'a': self._on_key_add,
+            'd': self._on_key_delete,
         }
 
         handler = action_map.get(key)

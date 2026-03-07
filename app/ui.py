@@ -272,6 +272,8 @@ class Tui:
         self.help_win.noutrefresh()
 
     def render(self, state: AppState):
+        if state.state != State.REGISTER:
+            curses.curs_set(0)
         self.draw_header(state)
         self.draw_sidebar(state)
         self.draw_main_area(state)
@@ -309,15 +311,33 @@ class Tui:
         self.register_win.addstr(1, w // 2 - 7, " チャンネル登録 ", curses.A_BOLD | curses.color_pair(self.COLOR_HIGHLIGHT))
 
         # Step 1: Platform
-        p_attr = curses.A_BOLD if not state.update_status or "Platform" not in state.update_status else curses.A_DIM
+        p_attr = curses.A_BOLD if state.registration_step == 0 else curses.A_DIM
         self.register_win.addstr(3, 4, "1. プラットフォームを選択", p_attr)
 
-        y_attr = curses.color_pair(self.COLOR_HIGHLIGHT) if state.update_status and "youtube" in state.update_status else curses.A_DIM
+        y_attr = curses.color_pair(self.COLOR_HIGHLIGHT) if state.registration_platform == "youtube" else curses.A_DIM
         self.register_win.addstr(4, 7, "[y]: YouTube", y_attr)
 
         # Step 2: Channel Name
-        n_attr = curses.A_BOLD if state.update_status and "Platform" in state.update_status else curses.A_DIM
+        n_attr = curses.A_BOLD if state.registration_step == 1 else curses.A_DIM
         self.register_win.addstr(6, 4, "2. チャンネル名を入力", n_attr)
+
+        if state.registration_step == 1:
+            prompt = "  入力: "
+            pw = self._get_display_width(prompt)
+            self.register_win.addstr(7, 4, prompt, curses.color_pair(self.COLOR_HIGHLIGHT) | curses.A_BOLD)
+
+            # Draw buffer
+            input_area_width = w - 4 - 4 - pw
+            self.register_win.addstr(7, 4 + pw, "_" * input_area_width, curses.A_DIM)
+            display_input = self._truncate_with_width(state.registration_buffer, input_area_width)
+            self.register_win.addstr(7, 4 + pw, display_input)
+
+            # Position cursor for doupdate
+            curses.curs_set(1)
+            cursor_pos = self._get_display_width(display_input)
+            self.register_win.move(7, 4 + pw + cursor_pos)
+        else:
+            curses.curs_set(0)
 
         # Footer guidance
         self.register_win.addstr(h - 2, 4, "[Esc: キャンセル]", curses.A_DIM)
@@ -330,52 +350,8 @@ class Tui:
         self.register_win.noutrefresh()
 
     def get_input_string(self, win, prompt: str, y: int, x: int) -> str:
-        curses.noecho()
-        curses.curs_set(1)
-        win.keypad(True)
-        self.stdscr.nodelay(False)
-
-        prompt_width = self._get_display_width(prompt)
-        win.attron(curses.color_pair(self.COLOR_HIGHLIGHT))
-        win.addstr(y, x, prompt, curses.A_BOLD)
-        win.attroff(curses.color_pair(self.COLOR_HIGHLIGHT))
-
-        # Visual underline/input field area
-        _, w = win.getmaxyx()
-        input_area_width = w - x - prompt_width - 4
-
-        input_str = ""
-        while True:
-            # Redraw input area
-            win.addstr(y, x + prompt_width, "_" * input_area_width, curses.A_DIM)
-            display_input = self._truncate_with_width(input_str, input_area_width)
-            win.addstr(y, x + prompt_width, display_input)
-
-            # Position cursor
-            cursor_pos = self._get_display_width(display_input)
-            win.move(y, x + prompt_width + cursor_pos)
-            win.refresh()
-
-            try:
-                ch = win.get_wch()
-            except:
-                continue
-
-            if ch == "\n" or ch == "\r" or ch == curses.KEY_ENTER: # Enter
-                break
-            elif ch == "\x1b": # Esc
-                input_str = ""
-                break
-            elif ch == curses.KEY_BACKSPACE or ch == "\x7f" or ch == "\x08": # Backspace
-                if len(input_str) > 0:
-                    input_str = input_str[:-1]
-            elif isinstance(ch, str): # Regular character
-                if len(input_str) < 50:
-                    input_str += ch
-
-        self.stdscr.nodelay(True)
-        curses.curs_set(0)
-        return input_str
+        # Deprecated: now handled by main loop
+        return ""
 
     def draw_loading(self, state: AppState):
         self.loading_win.erase()

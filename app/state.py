@@ -42,6 +42,9 @@ class AppState:
     update_status: Optional[str] = None
     error_message: Optional[str] = None
     previous_state: Optional[State] = None
+    registration_step: int = 0  # 0: platform, 1: channel name
+    registration_buffer: str = ""
+    registration_platform: str = ""
 
     @property
     def current_limit(self) -> int:
@@ -155,9 +158,7 @@ class AppState:
                 self.focus_area = FocusArea.SIDEBAR
             # Note: The caller (main.py) is responsible for refreshing display_videos
         elif event == Event.RANDOM_REFRESH:
-            if self.current_tab == "Random":
-                self.selected_idx = 0
-            # Note: The caller (main.py) is responsible for refreshing display_videos
+            # Random refresh is now deprecated in sidebar layout
             pass
 
     def _handle_launching(self, event: Event, **kwargs: Any) -> None:
@@ -207,11 +208,15 @@ class AppState:
             self.state = State.LOADING
         elif event == Event.BACK_TO_UI:
             self.state = State.BROWSE
+            self.registration_step = 0
+            self.registration_buffer = ""
 
     def _handle_loading(self, event: Event, **kwargs: Any) -> None:
         if event == Event.REGISTRATION_SUCCEEDED:
             self.update_status = "登録完了"
             self.state = State.BROWSE
+            self.registration_step = 0
+            self.registration_buffer = ""
         elif event == Event.REGISTRATION_FAILED:
             self.error_message = str(kwargs.get('error'))
             self.state = State.ERROR
