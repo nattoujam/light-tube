@@ -2,7 +2,7 @@ import curses
 import time
 from datetime import datetime, timedelta
 from typing import Optional, Any, List
-from .state import AppState, State
+from .state import AppState, State, FocusArea
 from .events import Event
 from .models import Video, Channel
 from .storage import VideoStorage
@@ -199,13 +199,11 @@ class VideoPlayerApp:
         self.app_state.handle_event(Event.HELP_TOGGLE)
 
     def _on_key_down(self) -> None:
-        from .state import FocusArea
         self.app_state.handle_event(Event.CURSOR_DOWN)
         if self.app_state.focus_area == FocusArea.SIDEBAR:
             self.refresh_app_state()
 
     def _on_key_up(self) -> None:
-        from .state import FocusArea
         self.app_state.handle_event(Event.CURSOR_UP)
         if self.app_state.focus_area == FocusArea.SIDEBAR:
             self.refresh_app_state()
@@ -213,20 +211,19 @@ class VideoPlayerApp:
     def _on_key_left(self) -> None:
         self.app_state.handle_event(Event.CURSOR_LEFT)
 
+    def _switch_to_main_area(self) -> None:
+        """Centralize logic for switching focus from sidebar to main area."""
+        self.app_state.handle_event(Event.CURSOR_RIGHT)
+        self.app_state.selected_idx = 0
+        self.refresh_app_state()
+
     def _on_key_right(self) -> None:
-        from .state import FocusArea
         if self.app_state.focus_area == FocusArea.SIDEBAR:
-            self.app_state.handle_event(Event.CURSOR_RIGHT)
-            self.app_state.selected_idx = 0
-            self.refresh_app_state()
+            self._switch_to_main_area()
 
     def _on_key_play(self) -> None:
-        from .state import FocusArea
         if self.app_state.focus_area == FocusArea.SIDEBAR:
-            # Switch to main area
-            self.app_state.handle_event(Event.CURSOR_RIGHT)
-            self.app_state.selected_idx = 0
-            self.refresh_app_state()
+            self._switch_to_main_area()
             return
 
         video = self._get_selected_video()
@@ -260,7 +257,6 @@ class VideoPlayerApp:
             self._handle_history_update(video)
 
     def _on_key_add(self) -> None:
-        from .state import FocusArea
         if self.app_state.focus_area != FocusArea.SIDEBAR:
             return
         if self.app_state.state != State.REGISTER:
@@ -271,12 +267,50 @@ class VideoPlayerApp:
             self.app_state.registration_platform = ""
 
     def _on_key_delete(self) -> None:
-        from .state import FocusArea
         if self.app_state.focus_area != FocusArea.SIDEBAR:
             return
         if self.app_state.sidebar_idx == 0: # "All Videos" cannot be deleted
             return
         self.app_state.handle_event(Event.DELETE_CHANNEL)
+
+    def _handle_registration_input(self, keys: List[Any]) -> bool:
+        """Process input for the registration modal."""
+        for key in keys:
+            if key == "\x1b": # ESC
+                self.app_state.handle_event(Event.BACK_TO_UI)
+                return True
+
+            if self.app_state.registration_step == 0: # Platform selection
+                if key == "y":
+                    self.app_state.registration_platform = "youtube"
+                    self.app_state.registration_step = 1
+            else: # Channel name input
+                if key == "\n" or key == "\r" or key == curses.KEY_ENTER:
+                    if self.app_state.registration_buffer:
+                        self._submit_registration()
+                    else:
+                        self.app_state.handle_event(Event.BACK_TO_UI)
+                elif key == curses.KEY_BACKSPACE or key == "\x7f" or key == "\x08":
+                    if len(self.app_state.registration_buffer) > 0:
+                        self.app_state.registration_buffer = self.app_state.registration_buffer[:-1]
+                elif isinstance(key, str):
+                    if len(self.app_state.registration_buffer) < 50:
+                        self.app_state.registration_buffer += key
+        return True
+
+    def _handle_confirmation_input(self, key: Any) -> bool:
+        """Process input for the deletion confirmation modal."""
+        if key == 'y':
+            channel = self._get_selected_channel()
+            if channel:
+                self.storage.delete_channel(channel.id)
+                self.refresh_app_state()
+            self.app_state.handle_event(Event.BACK_TO_UI)
+            return True
+        elif key == 'n' or key == 'b' or key == "\x1b":
+            self.app_state.handle_event(Event.BACK_TO_UI)
+            return True
+        return True
 
     def handle_input(self) -> bool:
         keys = []
@@ -293,28 +327,7 @@ class VideoPlayerApp:
 
         # Handle REGISTER state (Modal) - process ALL keys to avoid missing chars
         if self.app_state.state == State.REGISTER:
-            for key in keys:
-                if key == "\x1b": # ESC
-                    self.app_state.handle_event(Event.BACK_TO_UI)
-                    return True
-
-                if self.app_state.registration_step == 0: # Platform selection
-                    if key == "y":
-                        self.app_state.registration_platform = "youtube"
-                        self.app_state.registration_step = 1
-                else: # Channel name input
-                    if key == "\n" or key == "\r" or key == curses.KEY_ENTER:
-                        if self.app_state.registration_buffer:
-                            self._submit_registration()
-                        else:
-                            self.app_state.handle_event(Event.BACK_TO_UI)
-                    elif key == curses.KEY_BACKSPACE or key == "\x7f" or key == "\x08":
-                        if len(self.app_state.registration_buffer) > 0:
-                            self.app_state.registration_buffer = self.app_state.registration_buffer[:-1]
-                    elif isinstance(key, str):
-                        if len(self.app_state.registration_buffer) < 50:
-                            self.app_state.registration_buffer += key
-            return True
+            return self._handle_registration_input(keys)
 
         # For non-modal states, only process the LAST key to prevent "slippery" cursor
         key = keys[-1]
@@ -325,17 +338,7 @@ class VideoPlayerApp:
 
         # Handle CONFIRM_DELETE state
         if self.app_state.state == State.CONFIRM_DELETE:
-            if key == 'y':
-                channel = self._get_selected_channel()
-                if channel:
-                    self.storage.delete_channel(channel.id)
-                    self.refresh_app_state()
-                self.app_state.handle_event(Event.BACK_TO_UI)
-                return True
-            elif key == 'n' or key == 'b' or key == "\x1b":
-                self.app_state.handle_event(Event.BACK_TO_UI)
-                return True
-            return True
+            return self._handle_confirmation_input(key)
 
         # Dispatcher map for key actions
         action_map = {
