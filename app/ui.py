@@ -2,7 +2,7 @@ import curses
 import time
 from typing import List, Optional, Tuple
 import random
-from .state import AppState, State
+from .state import AppState, State, FocusArea
 from .models import Video, Channel
 
 class Tui:
@@ -113,7 +113,6 @@ class Tui:
                 pass
 
     def draw_sidebar(self, state: AppState):
-        from .state import FocusArea
         self.sidebar_win.erase()
         h, w = self.sidebar_win.getmaxyx()
 
@@ -158,7 +157,6 @@ class Tui:
         self.sidebar_win.noutrefresh()
 
     def draw_main_area(self, state: AppState):
-        from .state import FocusArea
         self.main_win.erase()
         main_height, main_width = self.main_win.getmaxyx()
 
@@ -225,7 +223,6 @@ class Tui:
         self.footer_win.addstr(1, 2, display_line1)
 
         # Row 2: Guide
-        from .state import FocusArea
         if state.focus_area == FocusArea.SIDEBAR:
             guide_text = "[Enter:Select] [a:Add] [d:Delete] [u:Update] [?:Help]"
         else:
@@ -250,7 +247,6 @@ class Tui:
             "q: Quit"
         ]
 
-        from .state import FocusArea
         if state.focus_area == FocusArea.SIDEBAR:
             items.insert(2, "a: Add Channel")
             items.insert(3, "d: Delete Channel")
@@ -387,18 +383,3 @@ class Tui:
         self.error_win.addstr(8, 2, "bキーで戻る")
         self.error_win.noutrefresh()
 
-    def get_input_string(self, prompt: str, y: int, x: int) -> str:
-        curses.echo()
-        curses.curs_set(1)
-        self.stdscr.nodelay(False)
-        self.stdscr.addstr(y, x, prompt)
-        self.stdscr.refresh()
-        try:
-            input_bytes = self.stdscr.getstr(y, x + len(prompt), 50)
-            input_str = input_bytes.decode('utf-8')
-        except:
-            input_str = ""
-        self.stdscr.nodelay(True)
-        curses.curs_set(0)
-        curses.noecho()
-        return input_str
