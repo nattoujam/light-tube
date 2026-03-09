@@ -79,17 +79,12 @@ class Tui:
             current_width += char_width
         return result
 
-    def _pad_with_width(self, text: str, target_width: int) -> str:
-        current_width = self._get_display_width(text)
-        if current_width >= target_width:
-            return text
-        return text + (" " * (target_width - current_width))
-
-    def _adjust_scroll(self, selected_idx: int, main_height: int) -> None:
-        if selected_idx < self.scroll_offset:
-            self.scroll_offset = selected_idx
-        elif selected_idx >= self.scroll_offset + main_height:
-            self.scroll_offset = selected_idx - main_height + 1
+    def _calculate_scroll_offset(self, current_idx: int, visible_height: int, current_offset: int) -> int:
+        if current_idx < current_offset:
+            return current_idx
+        elif current_idx >= current_offset + visible_height:
+            return current_idx - visible_height + 1
+        return current_offset
 
     def _draw_scrollbar(self, win, offset: int, total_items: int):
         h, w = win.getmaxyx()
@@ -112,6 +107,20 @@ class Tui:
             except curses.error:
                 pass
 
+    def _draw_sidebar_item(self, y: int, name: str, is_selected: bool, is_focused: bool, width: int):
+        display_name = self._truncate_with_width(name, width - 2)
+        attr = curses.A_NORMAL
+        if is_selected:
+            if is_focused:
+                attr = curses.color_pair(self.COLOR_HIGHLIGHT) | curses.A_BOLD
+            else:
+                attr = curses.A_UNDERLINE
+
+        try:
+            self.sidebar_win.addstr(y, 1, display_name, attr)
+        except curses.error:
+            pass
+
     def draw_sidebar(self, state: AppState):
         self.sidebar_win.erase()
         h, w = self.sidebar_win.getmaxyx()
@@ -120,30 +129,19 @@ class Tui:
         total_items = len(items)
 
         if state.focus_area == FocusArea.SIDEBAR:
-            if state.sidebar_idx < self.sidebar_scroll_offset:
-                self.sidebar_scroll_offset = state.sidebar_idx
-            elif state.sidebar_idx >= self.sidebar_scroll_offset + h:
-                self.sidebar_scroll_offset = state.sidebar_idx - h + 1
+            self.sidebar_scroll_offset = self._calculate_scroll_offset(state.sidebar_idx, h, self.sidebar_scroll_offset)
 
         for i in range(h):
             idx = i + self.sidebar_scroll_offset
             if idx >= total_items:
                 break
 
-            name = items[idx]
-            display_name = self._truncate_with_width(name, w - 2)
-
-            attr = curses.A_NORMAL
-            if idx == state.sidebar_idx:
-                if state.focus_area == FocusArea.SIDEBAR:
-                    attr = curses.color_pair(self.COLOR_HIGHLIGHT) | curses.A_BOLD
-                else:
-                    attr = curses.A_UNDERLINE
-
-            try:
-                self.sidebar_win.addstr(i, 1, display_name, attr)
-            except curses.error:
-                pass
+            self._draw_sidebar_item(
+                i, items[idx],
+                is_selected=(idx == state.sidebar_idx),
+                is_focused=(state.focus_area == FocusArea.SIDEBAR),
+                width=w
+            )
 
         self._draw_scrollbar(self.sidebar_win, self.sidebar_scroll_offset, total_items)
         # Vertical divider
@@ -156,6 +154,26 @@ class Tui:
                 pass
         self.sidebar_win.noutrefresh()
 
+    def _draw_video_line(self, y: int, video: Video, is_selected: bool, width: int):
+        viewed_mark = "●" if not video.viewed else " "
+        channel_info = f" {video.channel.name}"
+
+        attr = curses.A_NORMAL
+        if is_selected:
+            attr = curses.color_pair(self.COLOR_HIGHLIGHT) | curses.A_BOLD
+
+        title_width = width - 15 - self._get_display_width(channel_info)
+        title = self._truncate_with_width(video.title, title_width)
+
+        line = f" {viewed_mark} {title}"
+        try:
+            self.main_win.addstr(y, 0, line, attr)
+            # Align channel info to the right
+            chan_x = width - self._get_display_width(channel_info) - 2
+            self.main_win.addstr(y, chan_x, channel_info, curses.A_DIM)
+        except curses.error:
+            pass
+
     def draw_main_area(self, state: AppState):
         self.main_win.erase()
         main_height, main_width = self.main_win.getmaxyx()
@@ -164,34 +182,17 @@ class Tui:
         if not videos:
             self.main_win.addstr(1, 2, "No videos found.")
         else:
-            self._adjust_scroll(state.selected_idx, main_height)
+            self.scroll_offset = self._calculate_scroll_offset(state.selected_idx, main_height, self.scroll_offset)
             for i in range(main_height):
                 idx = i + self.scroll_offset
                 if idx >= len(videos):
                     break
 
-                video = videos[idx]
-                is_selected = (idx == state.selected_idx and state.focus_area == FocusArea.MAIN)
-
-                # Render video line
-                viewed_mark = "●" if not video.viewed else " "
-                channel_info = f" {video.channel.name}"
-
-                attr = curses.A_NORMAL
-                if is_selected:
-                    attr = curses.color_pair(self.COLOR_HIGHLIGHT) | curses.A_BOLD
-
-                title_width = main_width - 15 - self._get_display_width(channel_info)
-                title = self._truncate_with_width(video.title, title_width)
-
-                line = f" {viewed_mark} {title}"
-                try:
-                    self.main_win.addstr(i, 0, line, attr)
-                    # Align channel info to the right
-                    chan_x = main_width - self._get_display_width(channel_info) - 2
-                    self.main_win.addstr(i, chan_x, channel_info, curses.A_DIM)
-                except curses.error:
-                    pass
+                self._draw_video_line(
+                    i, videos[idx],
+                    is_selected=(idx == state.selected_idx and state.focus_area == FocusArea.MAIN),
+                    width=main_width
+                )
 
         self._draw_scrollbar(self.main_win, self.scroll_offset, len(videos))
         self.main_win.noutrefresh()
