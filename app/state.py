@@ -67,73 +67,83 @@ class AppState:
                 return self.display_channels[channel_idx]
         return None
 
+    @property
+    def current_tab(self) -> str:
+        """Return the current context name for backward compatibility and semantic clarity."""
+        return "Channels" if self.focus_area == FocusArea.SIDEBAR else "Videos"
+
     def handle_event(self, event: Event, **kwargs: Any) -> None:
         if event == Event.QUIT:
             return
 
-        if event == Event.HELP_TOGGLE:
-            self.show_help = not self.show_help
+        # Global event handlers (independent of state)
+        global_handlers = {
+            Event.HELP_TOGGLE: self._on_help_toggle,
+            Event.CURSOR_UP: self._on_cursor_up,
+            Event.CURSOR_DOWN: self._on_cursor_down,
+            Event.CURSOR_LEFT: self._on_cursor_left,
+            Event.CURSOR_RIGHT: self._on_cursor_right,
+            Event.CACHE_LOADED: self._on_cache_loaded,
+        }
+
+        handler = global_handlers.get(event)
+        if handler:
+            handler(**kwargs)
             return
 
-        if event == Event.CURSOR_UP:
-            if self.focus_area == FocusArea.SIDEBAR:
-                if self.sidebar_idx > 0:
-                    self.sidebar_idx -= 1
-            else:
-                if self.selected_idx > 0:
-                    self.selected_idx -= 1
-            return
+        # State-specific event handlers
+        state_handlers = {
+            State.BOOT: lambda _e, **_k: None, # Handled by CACHE_LOADED
+            State.BROWSE: self._handle_browse,
+            State.LAUNCHING: self._handle_launching,
+            State.PLAYING: self._handle_playing,
+            State.AFTER_PLAY: self._handle_after_play,
+            State.UPDATING: self._handle_updating,
+            State.REGISTER: self._handle_register,
+            State.LOADING: self._handle_loading,
+            State.CONFIRM_DELETE: self._handle_confirm_delete,
+            State.ERROR: self._handle_error,
+        }
 
-        if event == Event.CURSOR_DOWN:
-            if self.focus_area == FocusArea.SIDEBAR:
-                if self.sidebar_idx < self.current_limit - 1:
-                    self.sidebar_idx += 1
-            else:
-                if self.selected_idx < self.current_limit - 1:
-                    self.selected_idx += 1
-            return
+        state_handler = state_handlers.get(self.state)
+        if state_handler:
+            state_handler(event, **kwargs)
 
-        if event == Event.CURSOR_RIGHT:
-            if self.focus_area == FocusArea.SIDEBAR:
-                self.focus_area = FocusArea.MAIN
-                # Selection logic for which channel's videos to show will be in main.py
-            return
+    def _on_help_toggle(self, **kwargs: Any) -> None:
+        self.show_help = not self.show_help
 
-        if event == Event.CURSOR_LEFT:
-            if self.focus_area == FocusArea.MAIN:
-                self.focus_area = FocusArea.SIDEBAR
-            return
+    def _on_cursor_up(self, **kwargs: Any) -> None:
+        if self.focus_area == FocusArea.SIDEBAR:
+            if self.sidebar_idx > 0:
+                self.sidebar_idx -= 1
+        else:
+            if self.selected_idx > 0:
+                self.selected_idx -= 1
 
-        if event == Event.CACHE_LOADED:
-            self.display_videos = kwargs.get('videos', [])
-            self.display_channels = kwargs.get('channels', [])
-            # Adjust selected_idx if it's out of bounds
-            self.selected_idx = max(0, min(self.selected_idx, self.current_limit - 1))
+    def _on_cursor_down(self, **kwargs: Any) -> None:
+        if self.focus_area == FocusArea.SIDEBAR:
+            if self.sidebar_idx < self.current_limit - 1:
+                self.sidebar_idx += 1
+        else:
+            if self.selected_idx < self.current_limit - 1:
+                self.selected_idx += 1
 
-            if self.state == State.BOOT:
-                self.state = State.BROWSE
-            return
+    def _on_cursor_left(self, **kwargs: Any) -> None:
+        if self.focus_area == FocusArea.MAIN:
+            self.focus_area = FocusArea.SIDEBAR
+
+    def _on_cursor_right(self, **kwargs: Any) -> None:
+        if self.focus_area == FocusArea.SIDEBAR:
+            self.focus_area = FocusArea.MAIN
+
+    def _on_cache_loaded(self, **kwargs: Any) -> None:
+        self.display_videos = kwargs.get('videos', [])
+        self.display_channels = kwargs.get('channels', [])
+        # Adjust selected_idx if it's out of bounds
+        self.selected_idx = max(0, min(self.selected_idx, self.current_limit - 1))
 
         if self.state == State.BOOT:
-            pass # CACHE_LOADED handled above
-        elif self.state == State.BROWSE:
-            self._handle_browse(event, **kwargs)
-        elif self.state == State.LAUNCHING:
-            self._handle_launching(event, **kwargs)
-        elif self.state == State.PLAYING:
-            self._handle_playing(event, **kwargs)
-        elif self.state == State.AFTER_PLAY:
-            self._handle_after_play(event, **kwargs)
-        elif self.state == State.UPDATING:
-            self._handle_updating(event, **kwargs)
-        elif self.state == State.REGISTER:
-            self._handle_register(event, **kwargs)
-        elif self.state == State.LOADING:
-            self._handle_loading(event, **kwargs)
-        elif self.state == State.CONFIRM_DELETE:
-            self._handle_confirm_delete(event, **kwargs)
-        elif self.state == State.ERROR:
-            self._handle_error(event, **kwargs)
+            self.state = State.BROWSE
 
     def _handle_browse(self, event: Event, **kwargs: Any) -> None:
         if event == Event.PLAY_SELECTED or event == Event.NEXT:
@@ -218,7 +228,3 @@ class AppState:
     def _handle_error(self, event: Event, **kwargs: Any) -> None:
         if event == Event.BACK_TO_UI:
             self.state = State.BROWSE
-
-    def get_filtered_videos(self) -> List[Video]:
-        # Now display_videos already contains the filtered list from DB
-        return self.display_videos
