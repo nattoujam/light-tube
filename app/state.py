@@ -112,21 +112,21 @@ class AppState:
     def _on_help_toggle(self, **kwargs: Any) -> None:
         self.show_help = not self.show_help
 
-    def _on_cursor_up(self, **kwargs: Any) -> None:
+    def _move_vertical(self, delta: int) -> None:
         if self.focus_area == FocusArea.SIDEBAR:
-            if self.sidebar_idx > 0:
-                self.sidebar_idx -= 1
+            new_idx = self.sidebar_idx + delta
+            if 0 <= new_idx < self.current_limit:
+                self.sidebar_idx = new_idx
         else:
-            if self.selected_idx > 0:
-                self.selected_idx -= 1
+            new_idx = self.selected_idx + delta
+            if 0 <= new_idx < self.current_limit:
+                self.selected_idx = new_idx
+
+    def _on_cursor_up(self, **kwargs: Any) -> None:
+        self._move_vertical(-1)
 
     def _on_cursor_down(self, **kwargs: Any) -> None:
-        if self.focus_area == FocusArea.SIDEBAR:
-            if self.sidebar_idx < self.current_limit - 1:
-                self.sidebar_idx += 1
-        else:
-            if self.selected_idx < self.current_limit - 1:
-                self.selected_idx += 1
+        self._move_vertical(1)
 
     def _on_cursor_left(self, **kwargs: Any) -> None:
         if self.focus_area == FocusArea.MAIN:
