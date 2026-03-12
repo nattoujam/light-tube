@@ -135,6 +135,7 @@ class AppState:
     def _on_cursor_right(self, **kwargs: Any) -> None:
         if self.focus_area == FocusArea.SIDEBAR:
             self.focus_area = FocusArea.MAIN
+            self.selected_idx = 0
 
     def _on_cache_loaded(self, **kwargs: Any) -> None:
         self.display_videos = kwargs.get('videos', [])
@@ -157,6 +158,9 @@ class AppState:
         elif event == Event.REGISTER_CHANNEL:
             self.previous_state = self.state
             self.state = State.REGISTER
+            self.registration_step = 0
+            self.registration_buffer = ""
+            self.registration_platform = ""
         elif event == Event.DELETE_CHANNEL:
             if self.focus_area == FocusArea.SIDEBAR and self.sidebar_idx > 0:
                 self.state = State.CONFIRM_DELETE

@@ -78,3 +78,17 @@ def test_area_switch():
     assert state.focus_area == FocusArea.MAIN
     state.handle_event(Event.CURSOR_LEFT)
     assert state.focus_area == FocusArea.SIDEBAR
+
+def test_area_switch_resets_index():
+    from app.state import FocusArea
+    state = AppState(state=State.BROWSE, focus_area=FocusArea.SIDEBAR, selected_idx=5)
+    state.handle_event(Event.CURSOR_RIGHT)
+    assert state.focus_area == FocusArea.MAIN
+    assert state.selected_idx == 0
+
+def test_register_channel_initializes_buffer():
+    state = AppState(state=State.BROWSE)
+    state.registration_buffer = "previous"
+    state.handle_event(Event.REGISTER_CHANNEL)
+    assert state.state == State.REGISTER
+    assert state.registration_buffer == ""
