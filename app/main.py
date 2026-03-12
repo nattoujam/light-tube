@@ -198,32 +198,29 @@ class VideoPlayerApp:
     def _on_key_help(self) -> None:
         self.app_state.handle_event(Event.HELP_TOGGLE)
 
-    def _on_key_down(self) -> None:
-        self.app_state.handle_event(Event.CURSOR_DOWN)
-        if self.app_state.focus_area == FocusArea.SIDEBAR:
+    def _handle_navigation(self, event: Event) -> None:
+        """Handle cursor movement and refresh state if context changed."""
+        was_in_sidebar = (self.app_state.focus_area == FocusArea.SIDEBAR)
+        self.app_state.handle_event(event)
+        if was_in_sidebar:
             self.refresh_app_state()
+
+    def _on_key_down(self) -> None:
+        self._handle_navigation(Event.CURSOR_DOWN)
 
     def _on_key_up(self) -> None:
-        self.app_state.handle_event(Event.CURSOR_UP)
-        if self.app_state.focus_area == FocusArea.SIDEBAR:
-            self.refresh_app_state()
+        self._handle_navigation(Event.CURSOR_UP)
 
     def _on_key_left(self) -> None:
-        self.app_state.handle_event(Event.CURSOR_LEFT)
-
-    def _switch_to_main_area(self) -> None:
-        """Centralize logic for switching focus from sidebar to main area."""
-        self.app_state.handle_event(Event.CURSOR_RIGHT)
-        self.app_state.selected_idx = 0
-        self.refresh_app_state()
+        self._handle_navigation(Event.CURSOR_LEFT)
 
     def _on_key_right(self) -> None:
         if self.app_state.focus_area == FocusArea.SIDEBAR:
-            self._switch_to_main_area()
+            self._handle_navigation(Event.CURSOR_RIGHT)
 
     def _on_key_play(self) -> None:
         if self.app_state.focus_area == FocusArea.SIDEBAR:
-            self._switch_to_main_area()
+            self._handle_navigation(Event.CURSOR_RIGHT)
             return
 
         video = self._get_selected_video()
@@ -262,9 +259,6 @@ class VideoPlayerApp:
         if self.app_state.state != State.REGISTER:
             self.app_state.handle_event(Event.REGISTER_CHANNEL)
             self.app_state.error_message = None
-            self.app_state.registration_step = 0
-            self.app_state.registration_buffer = ""
-            self.app_state.registration_platform = ""
 
     def _on_key_delete(self) -> None:
         if self.app_state.focus_area != FocusArea.SIDEBAR:
@@ -369,24 +363,28 @@ class VideoPlayerApp:
 
         return True
 
+    def run(self) -> None:
+        """Main application loop."""
+        self.initialize_data()
+        self.refresh_app_state()
+
+        self.stdscr.nodelay(True)
+        running = True
+
+        while running:
+            self.update_background_status()
+            self.ui.render(self.app_state)
+            running = self.handle_input()
+            self.handle_state_actions()
+            time.sleep(0.05)
+
 def main(stdscr: Any) -> None:
     if curses.has_colors():
         curses.start_color()
         curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
 
     app = VideoPlayerApp(stdscr)
-    app.initialize_data()
-    app.refresh_app_state()
-
-    stdscr.nodelay(True)
-    running = True
-
-    while running:
-        app.update_background_status()
-        app.ui.render(app.app_state)
-        running = app.handle_input()
-        app.handle_state_actions()
-        time.sleep(0.05)
+    app.run()
 
 def run() -> None:
     curses.wrapper(main)
