@@ -34,3 +34,27 @@ class Repository:
 
     def get_oldest_video_date(self, channel_id: int) -> Optional[datetime]:
         return self.storage.get_oldest_video_date(channel_id)
+
+    def get_new_videos(self, limit: int = 100) -> List[Video]:
+        return self.storage.get_new_videos(limit)
+
+    def add_video(self, video: Video) -> int:
+        return self.storage.add_video(video)
+
+    def update_video(self, video: Video) -> None:
+        self.storage.update_video(video)
+
+    def get_videos_by_channel(self, channel_id: int, limit: int = 100) -> List[Video]:
+        return self.storage.get_videos_by_channel(channel_id, limit)
+
+    def get_channels(self) -> List[Channel]:
+        return self.storage.get_channels()
+
+    def get_channel_by_id(self, channel_id: int) -> Optional[Channel]:
+        return self.storage.get_channel_by_id(channel_id)
+
+    def delete_channel(self, channel_id: int) -> None:
+        self.storage.delete_channel(channel_id)
+
+    def select_next_video(self, current_id: Optional[str] = None, last_id: Optional[str] = None) -> Optional[Video]:
+        return self.storage.select_next_video(current_id, last_id)
