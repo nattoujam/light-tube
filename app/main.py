@@ -25,6 +25,29 @@ class VideoPlayerApp:
         self.repository = Repository(self.storage)
         self.channel_resolver = ChannelResolver(self.factory)
 
+        # Dispatcher map for key actions to avoid redundant recreation in handle_input
+        self._action_map = {
+            '?': self._on_key_help,
+            'j': self._on_key_down,
+            curses.KEY_DOWN: self._on_key_down,
+            'k': self._on_key_up,
+            curses.KEY_UP: self._on_key_up,
+            'h': self._on_key_left,
+            curses.KEY_LEFT: self._on_key_left,
+            'l': self._on_key_right,
+            curses.KEY_RIGHT: self._on_key_right,
+            '\n': self._on_key_play,
+            '\r': self._on_key_play,
+            curses.KEY_ENTER: self._on_key_play,
+            'n': self._on_key_next,
+            's': self._on_key_stop,
+            'b': self._on_key_back,
+            'u': self._on_key_update,
+            'i': self._on_key_history,
+            'a': self._on_key_add,
+            'd': self._on_key_delete,
+        }
+
     def initialize_data(self) -> None:
         # Use compat property 'videos' or just check if any record exists
         if not self.storage.get_new_videos(1):
@@ -334,30 +357,7 @@ class VideoPlayerApp:
         if self.app_state.state == State.CONFIRM_DELETE:
             return self._handle_confirmation_input(key)
 
-        # Dispatcher map for key actions
-        action_map = {
-            '?': self._on_key_help,
-            'j': self._on_key_down,
-            curses.KEY_DOWN: self._on_key_down,
-            'k': self._on_key_up,
-            curses.KEY_UP: self._on_key_up,
-            'h': self._on_key_left,
-            curses.KEY_LEFT: self._on_key_left,
-            'l': self._on_key_right,
-            curses.KEY_RIGHT: self._on_key_right,
-            '\n': self._on_key_play,
-            '\r': self._on_key_play,
-            curses.KEY_ENTER: self._on_key_play,
-            'n': self._on_key_next,
-            's': self._on_key_stop,
-            'b': self._on_key_back,
-            'u': self._on_key_update,
-            'i': self._on_key_history,
-            'a': self._on_key_add,
-            'd': self._on_key_delete,
-        }
-
-        handler = action_map.get(key)
+        handler = self._action_map.get(key)
         if handler:
             handler()
 
