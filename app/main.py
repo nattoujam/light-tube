@@ -19,11 +19,11 @@ class VideoPlayerApp:
         self.ui = Tui(stdscr)
         self.stdscr = stdscr
 
-        # New components from upstream
+        # Centralized orchestration via Repository
         self.factory = PlatformFactory('config.yml')
-        self.video_fetcher = VideoFetcher(self.factory)
-        self.repository = Repository(self.storage)
-        self.channel_resolver = ChannelResolver(self.factory)
+        video_fetcher = VideoFetcher(self.factory)
+        channel_resolver = ChannelResolver(self.factory)
+        self.repository = Repository(self.storage, video_fetcher, channel_resolver)
 
     def initialize_data(self) -> None:
         # Use compat property 'videos' or just check if any record exists
@@ -97,7 +97,7 @@ class VideoPlayerApp:
             channels = self.storage.get_channels()
             for channel in channels:
                 try:
-                    added = self._sync_channel_videos(channel, fetch_type="recent", limit=50)
+                    added = self.repository.sync_channel(channel, fetch_type="recent", limit=50)
                     added_total += added
                 except Exception as e:
                     self.app_state.handle_event(Event.UPDATE_FAILED, error=str(e))
@@ -136,22 +136,6 @@ class VideoPlayerApp:
     def _get_selected_channel(self) -> Optional[Channel]:
         return self.app_state.highlighted_channel
 
-    def _sync_channel_videos(self, channel: Channel, fetch_type: str = "recent", **kwargs: Any) -> int:
-        """
-        Fetch and save videos for a channel.
-        fetch_type can be "recent" or "history".
-        """
-        if fetch_type == "recent":
-            rvs = self.video_fetcher.fetch_recent(channel.platform, channel.external_id, limit=kwargs.get('limit', 50))
-        elif fetch_type == "history":
-            rvs = self.video_fetcher.fetch_history(channel.platform, channel.external_id,
-                                                   published_before=kwargs.get('published_before'),
-                                                   limit=kwargs.get('limit', 50))
-        else:
-            return 0
-
-        return self.repository.save_remote_videos(channel, rvs)
-
     def _handle_history_update(self, video: Video) -> None:
         if not video.channel_id:
             return
@@ -164,7 +148,7 @@ class VideoPlayerApp:
         self.ui.render(self.app_state)
         try:
             oldest_date = self.repository.get_oldest_video_date(video.channel_id)
-            added = self._sync_channel_videos(channel, fetch_type="history", published_before=oldest_date, limit=50)
+            added = self.repository.sync_channel(channel, fetch_type="history", published_before=oldest_date, limit=50)
             self.app_state.handle_event(Event.UPDATE_SUCCEEDED, added_count=added)
             self.refresh_app_state()
         except Exception as e:
@@ -178,18 +162,7 @@ class VideoPlayerApp:
         self.ui.render(self.app_state)
 
         try:
-            external_id = self.channel_resolver.resolve(platform_name, channel_name)
-            channel_id = self.repository.save_channel(platform_name, channel_name, external_id)
-
-            channel = Channel(
-                id=channel_id,
-                platform=platform_name,
-                name=channel_name,
-                external_id=external_id,
-                created_at=datetime.now()
-            )
-            self._sync_channel_videos(channel, fetch_type="recent", limit=50)
-
+            self.repository.resolve_and_save_channel(platform_name, channel_name, sync=True)
             self.app_state.handle_event(Event.REGISTRATION_SUCCEEDED)
             self.refresh_app_state()
         except Exception as e:
