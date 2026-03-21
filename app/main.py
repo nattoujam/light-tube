@@ -13,7 +13,7 @@ from core.repository import Repository
 
 class VideoPlayerApp:
     def __init__(self, stdscr: Any):
-        self.storage = VideoStorage('videos.db')
+        storage = VideoStorage('videos.db')
         self.app_state = AppState()
         self.player = MpvPlayer()
         self.ui = Tui(stdscr)
@@ -22,34 +22,34 @@ class VideoPlayerApp:
         # New components from upstream
         self.factory = PlatformFactory('config.yml')
         self.video_fetcher = VideoFetcher(self.factory)
-        self.repository = Repository(self.storage)
+        self.repository = Repository(storage)
         self.channel_resolver = ChannelResolver(self.factory)
 
     def initialize_data(self) -> None:
         # Use compat property 'videos' or just check if any record exists
-        if not self.storage.get_new_videos(1):
+        if not self.repository.get_new_videos(1):
             # Create a dummy channel for initial data
-            channel_id = self.storage.save_channel("sample", "Blender", "blender_id")
+            channel_id = self.repository.save_channel("sample", "Blender", "blender_id")
             channel = Channel(id=channel_id, platform="sample", name="Blender", external_id="blender_id", created_at=datetime.now())
 
-            self.storage.add_video(Video("1", "Big Buck Bunny", channel, datetime(2023, 1, 1), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", platform="sample", channel_id=channel_id))
-            self.storage.add_video(Video("2", "Elephants Dream", channel, datetime(2023, 1, 2), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", platform="sample", channel_id=channel_id))
-            self.storage.add_video(Video("3", "Tears of Steel", channel, datetime(2023, 1, 3), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4", platform="sample", channel_id=channel_id))
+            self.repository.add_video(Video("1", "Big Buck Bunny", channel, datetime(2023, 1, 1), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", platform="sample", channel_id=channel_id))
+            self.repository.add_video(Video("2", "Elephants Dream", channel, datetime(2023, 1, 2), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", platform="sample", channel_id=channel_id))
+            self.repository.add_video(Video("3", "Tears of Steel", channel, datetime(2023, 1, 3), "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4", platform="sample", channel_id=channel_id))
 
     def mark_video_as_viewed(self, video: Optional[Video]) -> None:
         if video:
             video.viewed = True
-            self.storage.update_video(video)
+            self.repository.update_video(video)
 
     def get_display_videos(self) -> List[Video]:
         # Based on sidebar selection
         channel = self.app_state.highlighted_channel
         if channel:
             # Newest videos from this channel
-            return self.storage.get_videos_by_channel(channel.id, 100)
+            return self.repository.get_videos_by_channel(channel.id, 100)
         else:
             # "All Videos" -> Newest 100 videos
-            return self.storage.get_new_videos(100)
+            return self.repository.get_new_videos(100)
 
     def _get_active_video_id(self) -> Optional[str]:
         if self.app_state.now_playing:
@@ -61,13 +61,13 @@ class VideoPlayerApp:
     def refresh_app_state(self) -> None:
         # Refresh display videos and channels
         videos = self.get_display_videos()
-        channels = self.storage.get_channels()
+        channels = self.repository.get_channels()
         self.app_state.handle_event(Event.CACHE_LOADED, videos=videos, channels=channels)
 
         # Update next video cache
         current_id = self._get_active_video_id()
 
-        self.app_state.next_video = self.storage.select_next_video(
+        self.app_state.next_video = self.repository.select_next_video(
                                                 current_id=current_id,
                                                 last_id=self.app_state.last_played_video.id if self.app_state.last_played_video else None)
 
@@ -94,7 +94,7 @@ class VideoPlayerApp:
 
         if self.app_state.busy_until and datetime.now() >= self.app_state.busy_until:
             added_total = 0
-            channels = self.storage.get_channels()
+            channels = self.repository.get_channels()
             for channel in channels:
                 try:
                     added = self._sync_channel_videos(channel, fetch_type="recent", limit=50)
@@ -156,7 +156,7 @@ class VideoPlayerApp:
         if not video.channel_id:
             return
 
-        channel = self.storage.get_channel_by_id(video.channel_id)
+        channel = self.repository.get_channel_by_id(video.channel_id)
         if not channel:
             return
 
@@ -297,7 +297,7 @@ class VideoPlayerApp:
         if key == 'y':
             channel = self._get_selected_channel()
             if channel:
-                self.storage.delete_channel(channel.id)
+                self.repository.delete_channel(channel.id)
                 self.refresh_app_state()
             self.app_state.handle_event(Event.BACK_TO_UI)
             return True
